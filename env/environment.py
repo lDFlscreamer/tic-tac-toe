@@ -41,7 +41,7 @@ class Game_environment(gym.Env):
                 opponent_action = self.opponent(np.stack([state * -1], axis=0))[0, :, :, 0]
                 opponent_action = opponent_action.numpy()
                 a = unravel_index(opponent_action.argmax(), opponent_action.shape)
-                # print(a)
+                print(a)
             else:
                 a = self.action_space.sample()
             opponent_turn = self.do_turn(a, -1)
@@ -82,12 +82,12 @@ class Game_environment(gym.Env):
         done = done or column_m[0]
         reward += MARK_COST * column_m[1]
 
-        diagonal = np.diag(region)
+        diagonal = np.diag(region, k=(local_x - local_y))
         diagonal_m = self.count_mark(diagonal, MARK_CHAR)
         done = done or diagonal_m[0]
         reward += MARK_COST * diagonal_m[1]
 
-        flip_diagonal = np.diag(np.fliplr(region))
+        flip_diagonal = np.diag(np.fliplr(region), k=(local_x - local_y))
         flip_diagonal_m = self.count_mark(flip_diagonal, MARK_CHAR)
         done = done or flip_diagonal_m[0]
         reward += MARK_COST * flip_diagonal_m[1]

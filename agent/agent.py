@@ -20,7 +20,7 @@ class Game_agent:
     def __init__(self):
 
         self.gamma = 0.85
-        self.epsilon = 1.0
+        self.epsilon = 0.8
         self.epsilon_decay = 0.995
 
         self.model = self.get_bot()

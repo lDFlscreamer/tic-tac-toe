@@ -14,6 +14,7 @@ import CONSTANT
 
 MARK_COST = 1
 WIN_REWARD = 100
+LOSE_PENALTY = 250
 
 
 class Game_environment(gym.Env):
@@ -40,11 +41,12 @@ class Game_environment(gym.Env):
                 opponent_action = self.opponent(np.stack([state * -1], axis=0))[0, :, :, 0]
                 opponent_action = opponent_action.numpy()
                 a = unravel_index(opponent_action.argmax(), opponent_action.shape)
+                # print(a)
             else:
                 a = self.action_space.sample()
             opponent_turn = self.do_turn(a, -1)
             if opponent_turn[2]:
-                reward = -100
+                reward = -LOSE_PENALTY
         else:
             return my_turn
         return opponent_turn[0], reward, opponent_turn[2], {}
@@ -70,62 +72,28 @@ class Game_environment(gym.Env):
         local_y = line - y_up
         local_x = column - X_left
 
-        left_before = np.count_nonzero(region[local_y, :local_x + 1] == 1)
-        reward = max(reward, MARK_COST * left_before)  # line left
-        done = done or left_before >= 4
-        left_after = np.count_nonzero(region[local_y, local_x:] == MARK_CHAR)
-        if not np.all(region[local_y, local_x:] != MARK_CHAR * (-1)):
-            reward = 0
-        else:
-            reward = max(reward, MARK_COST * left_after)  # line right
-        done = done or left_after >= 4
-        column_up = np.count_nonzero(region[:local_y + 1, local_x] == MARK_CHAR)
-        if not np.all(region[:local_y + 1, local_x] != MARK_CHAR * (-1)):
-            reward = 0
-        else:
-            reward = max(reward, MARK_COST * column_up)  # column up
-        done = done or column_up >= 4
-        column_down = np.count_nonzero(region[local_y:, local_x] == MARK_CHAR)
-        if not np.all(region[local_y:, local_x] != MARK_CHAR * (-1)):
-            reward = 0
-        else:
-            reward = max(reward, MARK_COST * column_down)  # column down
-        done = done or column_down >= 4
+        line = region[:, local_x]
+        line_m = self.count_mark(line, MARK_CHAR)
+        done = done or line_m[0]
+        reward += MARK_COST * line_m[1]
 
-        # diagonals
-        up_left = region[:local_y + 1, :local_x + 1]
-        mark_up_left = np.count_nonzero(up_left.diagonal() == MARK_CHAR)
-        if not np.all(up_left.diagonal() != MARK_CHAR * (-1)):
-            reward = 0
-        else:
-            reward = max(reward, MARK_COST * mark_up_left)
-        done = done or mark_up_left >= 4
+        column = region[local_y, :]
+        column_m = self.count_mark(column, MARK_CHAR)
+        done = done or column_m[0]
+        reward += MARK_COST * column_m[1]
 
-        up_right = region[:local_y + 1, local_x:]
-        mark_up_right = np.count_nonzero(np.diag(np.fliplr(up_right)) == MARK_CHAR)
-        if not np.all(up_right.diagonal() != MARK_CHAR * (-1)):
-            reward = 0
-        else:
-            reward = max(reward, MARK_COST * mark_up_right)
-        done = done or mark_up_right >= 4
+        diagonal = np.diag(region)
+        diagonal_m = self.count_mark(diagonal, MARK_CHAR)
+        done = done or diagonal_m[0]
+        reward += MARK_COST * diagonal_m[1]
 
-        down_left = region[local_y:, :local_x + 1]
-        mark_down_left = np.count_nonzero(np.diag(np.fliplr(down_left)) == MARK_CHAR)
-        if not np.all(down_left.diagonal() != MARK_CHAR * (-1)):
-            reward = 0
-        else:
-            reward = max(reward, MARK_COST * mark_down_left)
-        done = done or mark_down_left >= 4
+        flip_diagonal = np.diag(np.fliplr(region))
+        flip_diagonal_m = self.count_mark(flip_diagonal, MARK_CHAR)
+        done = done or flip_diagonal_m[0]
+        reward += MARK_COST * flip_diagonal_m[1]
 
-        down_right = region[local_y:, local_x:]
-        mark_down_right = np.count_nonzero(down_right.diagonal() == MARK_CHAR)
-        if not np.all(down_right.diagonal() != MARK_CHAR * (-1)):
-            reward = 0
-        else:
-            reward = max(reward, MARK_COST * mark_down_right)
-        done = done or mark_down_right >= 4
         if done:
-            reward = 100
+            reward = WIN_REWARD
 
         obs = self.get_state()
         return obs, reward, done, {}
@@ -137,3 +105,13 @@ class Game_environment(gym.Env):
 
     def get_state(self):
         return self.state
+
+    def count_mark(self, arr, MARK_CHAR):
+        count = 0
+        for i in range(0, len(arr) - 4):
+            curr = arr[i:i + 4]
+            if np.all(curr != MARK_CHAR * (-1)):
+                count = max(count, np.count_nonzero(curr == MARK_CHAR))
+                if count == 4:
+                    return True, 4
+        return False, count

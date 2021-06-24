@@ -16,6 +16,7 @@ from env.environment import Game_environment
 # # g.state[:,:,0]
 # # a.reinforcement_learning(env=g, num_episodes=500)
 # print("s")
+
 from visual.gui import TicTacToeGUI
 
 gui = TicTacToeGUI()

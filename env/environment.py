@@ -13,7 +13,8 @@ import CONSTANT
 # O = -1
 
 MARK_COST = 1
-WIN_REWARD = 100
+NOT_EMPTY_PENALTY = 100
+WIN_REWARD = 250
 LOSE_PENALTY = 250
 
 
@@ -25,11 +26,11 @@ class Game_environment(gym.Env):
         self.action_space = spaces.Box(low=0, high=CONSTANT.FIELD_SIZE - 1, shape=(2,), dtype=np.int)
 
     def get_oponent(self):
-        model_is_exist = os.path.exists(CONSTANT.AGENT_MODEL_LOSS_PATH)
+        model_is_exist = os.path.exists(CONSTANT.AGENT_TEMP_MODEL_PATH)
         if not model_is_exist:
             model = None
         else:
-            model = load_model(CONSTANT.AGENT_MODEL_LOSS_PATH)
+            model = load_model(CONSTANT.AGENT_TEMP_MODEL_PATH)
         return model
 
     def step(self, action):
@@ -41,7 +42,7 @@ class Game_environment(gym.Env):
                 opponent_action = self.opponent(np.stack([state * -1], axis=0))[0, :, :, 0]
                 opponent_action = opponent_action.numpy()
                 a = unravel_index(opponent_action.argmax(), opponent_action.shape)
-                print(a)
+                # print(a)
             else:
                 a = self.action_space.sample()
             opponent_turn = self.do_turn(a, -1)
@@ -56,9 +57,9 @@ class Game_environment(gym.Env):
         line = action[0]
         column = action[1]
         if np.count_nonzero(self.state[:, :, 0] == 0) == 0:
-            done = True
+            return self.get_state(), 0, done, {}
         if self.state[line][column][0] != 0:
-            return self.get_state(), -50, done, {}
+            return self.get_state(), -NOT_EMPTY_PENALTY, done, {}
 
         self.state[line][column][0] = MARK_CHAR
         reward = 0
@@ -109,7 +110,7 @@ class Game_environment(gym.Env):
     def count_mark(self, arr, MARK_CHAR):
         count = 0
         for i in range(0, len(arr) - 4):
-            curr = arr[i:i + 4]
+            curr = arr[i:i + 5]
             if np.all(curr != MARK_CHAR * (-1)):
                 count = max(count, np.count_nonzero(curr == MARK_CHAR))
                 if count == 4:

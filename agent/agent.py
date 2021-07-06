@@ -18,14 +18,16 @@ AGENT_ACTIVATION = "linear"
 class Game_agent:
 
     def __init__(self):
-
-        self.gamma = 0.85
+        self.gamma = 0.25
         self.epsilon = 0.8
-        self.epsilon_decay = 0.995
+        self.epsilon_min = 0.06
+        self.epsilon_decay = 0.9995
 
+        self.memory = list()
         self.model = self.get_bot()
+
         log_dir = CONSTANT.TENSORBOARD_LOG_DIR + datetime.now().strftime("%Y%m%d-%H-%M-%S")
-        self.tb_callback = tf.keras.callbacks.TensorBoard(update_freq=20, write_graph=False, log_dir=log_dir)
+        self.summary_writer = tf.summary.create_file_writer(logdir=log_dir)
 
     def get_callbacks(self, epoch):
         call_back = []
@@ -45,8 +47,6 @@ class Game_agent:
                                          save_best_only=True,
                                          save_freq=1)
         call_back.append(mae_checkpoint)
-        if epoch % 20 == 0:
-            call_back.append(self.tb_callback)
         return call_back
 
     def create_model(self):
@@ -130,10 +130,12 @@ class Game_agent:
 
         net = Conv2D(filters=8, kernel_size=(2, 2), padding="same",
                      activation=None, name="second_decoder")(net)
+        net = BatchNormalization()(net)
         net = Activation("linear")(net)
 
         net = Conv2D(filters=1, kernel_size=(2, 2), padding="same",
                      activation=None, name="third_decoder")(net)
+        net = BatchNormalization()(net)
         net = Activation("linear")(net)
 
         model = Model(inputs=input, outputs=net)
@@ -162,13 +164,15 @@ class Game_agent:
         return model
 
     def reinforcement_learning(self, env: gym.Env, num_episodes=250):
-
         for i in range(num_episodes):
             epoch = 0
             s = env.reset()
             self.epsilon *= self.epsilon_decay
+            self.epsilon = max(self.epsilon_min, self.epsilon)
             if i % 50 == 0:
                 print("Episode {} of {}".format(i + 1, num_episodes))
+                self.model.save(CONSTANT.AGENT_TEMP_MODEL_PATH)
+                print('save %d version' % i)
             done = False
             while not done:
                 model_state = np.stack([s], axis=0)
@@ -179,33 +183,73 @@ class Game_agent:
                     q_s = q_s.numpy()
                     a = unravel_index(q_s.argmax(), q_s.shape)
                 new_s, r, done, _ = env.step(a)
-                model_new_state = np.stack([new_s], axis=0)
-                predict_new_state = self.model(model_new_state)[0, :, :, 0]
-                target = r + self.gamma * np.max(predict_new_state)
 
-                target_vec = self.model(model_state)
-                target_vec = target_vec.numpy()
-                target_vec[0][a[0]][a[1]][0] = target
-                self.model.fit(model_state, target_vec, initial_epoch=epoch, epochs=1, verbose=1,
-                               callbacks=self.get_callbacks(epoch))
+                self.memory.append((model_state, a, r, done))
+                # if not done:
+                #     model_new_state = np.stack([new_s], axis=0)
+                #     predict_new_state = self.model(model_new_state)[0, :, :, 0]
+                #     possible_reward = self.gamma * np.max(predict_new_state)
+                #     target = r + self.gamma * possible_reward
+                # else:
+                #     target = r
+                # target_vec = self.model(model_state)
+                # target_vec = target_vec.numpy()
+                # target_vec[0][a[0]][a[1]][0] = target
+                # self.model.fit(model_state, target_vec, initial_epoch=epoch, epochs=1, verbose=1,
+                #                callbacks=self.get_callbacks(epoch))
+                # self.train_step(self.model, model_state, target_vec)
+
+                with self.summary_writer.as_default():
+                    tf.summary.scalar("reward", data=r, step=1)
+                    tf.summary.scalar("epsilon", data=self.epsilon, step=1)
+                if epoch % 10 == 0:
+                    print({m.name: float(m.result()) for m in self.model.metrics})
                 epoch += 1
                 s = new_s
+                self.model.compiled_metrics.reset_state()
+            self.train_network()
 
-    # @staticmethod
-    # def train_step(model: Model, x, y):
-    #     with tf.GradientTape() as tape:
-    #         y_pred = model(x, training=True)  # Forward pass
-    #         # Compute the loss value
-    #         # (the loss function is configured in `compile()`)
-    #         loss = model.compiled_loss(y, y_pred, regularization_losses=model.losses)
-    #
-    #     # Compute gradients
-    #     trainable_vars = model.trainable_variables
-    #     gradients = tape.gradient(loss, trainable_vars)
-    #     # Update weights
-    #     model.optimizer.apply_gradients(zip(gradients, trainable_vars))
-    #     # Update metrics (includes the metric that tracks the loss)
-    #     model.compiled_metrics.update_state(y, y_pred)
-    #     # Return a dict mapping metric names to current value
-    #     model.save(CONSTANT.AGENT_TEMP_MODEL_PATH)
-    #     print({m.name: m.result() for m in model.metrics})
+    def train_network(self):
+        for i in range(len(self.memory) - 1, -1, -1):
+            model_state = self.memory[i][0]
+            a = self.memory[i][1]
+            reward = self.memory[i][2]
+            done = self.memory[i][3]
+            if not done:
+                new_m_state = self.memory[i + 1][0]
+                predict_new_state = self.model(new_m_state)[0, :, :, 0]
+                possible_reward = self.gamma * np.max(predict_new_state)
+                target = reward + self.gamma * possible_reward
+            else:
+                target = reward
+            target_vec = self.model(model_state)
+            target_vec = target_vec.numpy()
+            target_vec[0][a[0]][a[1]][0] = target
+            self.train_step(self.model, model_state, target_vec)
+            with self.summary_writer.as_default():
+                if i == 0:
+                    tf.summary.scalar("game_turn_amount", data=len(self.memory), step=1)
+                tf.summary.scalar("reward_train", data=reward, step=1)
+                tf.summary.scalar("target_train", data=target, step=1)
+                for m in self.model.metrics:
+                    tf.summary.scalar(m.name, data=float(m.result()), step=1)
+        self.memory.clear()
+
+    @tf.function
+    def train_step(self, model: Model, x, y):
+        with tf.GradientTape() as tape:
+            y_pred = model(x, training=True)  # Forward pass
+            y = tf.convert_to_tensor(y)
+            # Compute the loss value
+            # (the loss function is configured in `compile()`)
+            loss = model.compiled_loss(y, y_pred, regularization_losses=model.losses)
+
+        # Compute gradients
+        trainable_vars = model.trainable_variables
+        gradients = tape.gradient(loss, trainable_vars)
+        # Update weights
+        model.optimizer.apply_gradients(zip(gradients, trainable_vars))
+        # model.optimizer.minimize(loss, trainable_vars, tape=tape)
+        # Update metrics (includes the metric that tracks the loss)
+        model.compiled_metrics.update_state(y, y_pred)
+        # Return a dict mapping metric names to current value

@@ -1,5 +1,6 @@
 from tkinter import Tk, Label, Button, StringVar, Frame
 
+import CONSTANT
 from env.environment import Game_environment
 
 
@@ -22,12 +23,12 @@ class TicTacToeGUI:
         self.player_label = StringVar(self.t, value="PLAYER 1 :%i" % self.score)
         l1 = Label(self.t, textvariable=self.player_label, height=3, font=("COMIC SANS MS", 10, "bold"), bg="white")
         l1.grid(row=0, column=0)  # Quit button
-        exitButton = Button(self.t, text="Quit", command=self.t.destroy, font=("COMIC SANS MS", 10, "bold"))
+        exitButton = Button(self.t, text="reset", command=self.reset, font=("COMIC SANS MS", 10, "bold"))
         exitButton.grid(row=0, column=2)  # Grid buttons
 
-        for i in range(0, 32):
+        for i in range(0, CONSTANT.FIELD_SIZE):
             row = []
-            for j in range(0, 32):
+            for j in range(0, CONSTANT.FIELD_SIZE):
                 lbl = StringVar(self.app, "")
                 row.append(lbl)
                 Button(self.app, textvariable=lbl, height=1, width=1, bg="white",
@@ -45,7 +46,7 @@ class TicTacToeGUI:
             self.end = step[2]
             print('end')
         self.score += step[1]
-        self.player_label.set(value="PLAYER 1 :%i" % self.score)
+        self.update_score()
         self.change_board(step[0])
 
     def change_board(self, state):
@@ -61,3 +62,13 @@ class TicTacToeGUI:
                 if state[i][j] == -1:
                     if not btn.get() == "O":
                         btn.set("O")
+
+    def update_score(self):
+        self.player_label.set(value="PLAYER 1 :%i" % self.score)
+
+    def reset(self):
+        self.end = False
+        self.env.reset()
+        self.change_board(self.env.get_state())
+        self.score = 0
+        self.update_score()

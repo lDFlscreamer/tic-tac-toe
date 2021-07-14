@@ -57,7 +57,7 @@ class Game_environment(gym.Env):
         line = action[0]
         column = action[1]
         if np.count_nonzero(self.state[:, :, 0] == 0) == 0:
-            return self.get_state(), 0, done, {}
+            return self.get_state(), 0, True, {}
         if self.state[line][column][0] != 0:
             return self.get_state(), -NOT_EMPTY_PENALTY, done, {}
 
@@ -109,8 +109,8 @@ class Game_environment(gym.Env):
 
     def count_mark(self, arr, MARK_CHAR):
         count = 0
-        for i in range(0, len(arr) - 4):
-            curr = arr[i:i + 5]
+        for i in range(0, len(arr) - 3):
+            curr = arr[i:i + 4]
             if np.all(curr != MARK_CHAR * (-1)):
                 count = max(count, np.count_nonzero(curr == MARK_CHAR))
                 if count == 4:

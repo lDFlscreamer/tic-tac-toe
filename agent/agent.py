@@ -1,10 +1,11 @@
+import io
 import os
 from datetime import datetime
 
 import gym
+import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
-from keras.callbacks import ModelCheckpoint
 from numpy import unravel_index
 from tensorflow.keras.layers import *
 from tensorflow.keras.models import *
@@ -18,36 +19,17 @@ AGENT_ACTIVATION = "linear"
 class Game_agent:
 
     def __init__(self):
-        self.gamma = 0.25
-        self.epsilon = 0.8
+        self.gamma = 0.4
+        self.epsilon = 1
         self.epsilon_min = 0.06
-        self.epsilon_decay = 0.9995
+        self.epsilon_decay = 0.995
+        self.step = 0
 
         self.memory = list()
         self.model = self.get_bot()
 
         log_dir = CONSTANT.TENSORBOARD_LOG_DIR + datetime.now().strftime("%Y%m%d-%H-%M-%S")
         self.summary_writer = tf.summary.create_file_writer(logdir=log_dir)
-
-    def get_callbacks(self, epoch):
-        call_back = []
-        temp_checkpoint = ModelCheckpoint(CONSTANT.AGENT_TEMP_MODEL_PATH,
-                                          verbose=1,
-                                          save_freq=1)
-        call_back.append(temp_checkpoint)
-        loss_checkpoint = ModelCheckpoint(CONSTANT.AGENT_MODEL_LOSS_PATH,
-                                          monitor='loss',
-                                          mode='min',
-                                          save_best_only=True,
-                                          save_freq=1)
-        call_back.append(loss_checkpoint)
-        mae_checkpoint = ModelCheckpoint(CONSTANT.AGENT_MODEL_MAE_PATH,
-                                         monitor=AGENT_METRIC,
-                                         mode="min",
-                                         save_best_only=True,
-                                         save_freq=1)
-        call_back.append(mae_checkpoint)
-        return call_back
 
     def create_model(self):
         # todo: model architecture
@@ -58,83 +40,93 @@ class Game_agent:
                        activation=None, name="first")(net)
         first = BatchNormalization()(first)
         first = Activation(AGENT_ACTIVATION)(first)
-
-        net_before = first
-        first = Conv2D(filters=8, kernel_size=(2, 2), padding="same", activation=None, name="first_skip_1")(net_before)
-        first = BatchNormalization()(first)
-        first = Activation(AGENT_ACTIVATION)(first)
-
-        net_after = Add()([net_before, first])
-        first = net_after
-
-        net_before = first
-        first = Conv2D(filters=8, kernel_size=(2, 2), padding="same", activation=None, name="first_skip_2")(net_before)
-        first = BatchNormalization()(first)
-        first = Activation(AGENT_ACTIVATION)(first)
-
-        net_after = Add()([net_before, first])
-        first = net_after
-
+        #
+        # net_before = first
+        # first = Conv2D(filters=8, kernel_size=(2, 2), padding="same", activation=None, name="first_skip_1")(net_before)
+        # first = BatchNormalization()(first)
+        # first = Activation(AGENT_ACTIVATION)(first)
+        #
+        # net_after = Add()([net_before, first])
+        # first = net_after
+        #
+        # net_before = first
+        # first = Conv2D(filters=8, kernel_size=(2, 2), padding="same", activation=None, name="first_skip_2")(net_before)
+        # first = BatchNormalization()(first)
+        # first = Activation(AGENT_ACTIVATION)(first)
+        #
+        # net_after = Add()([net_before, first])
+        # first = net_after
+        #
         second = Conv2D(filters=8, kernel_size=(3, 3), padding="same",
                         activation=None, name="second")(net)
         second = BatchNormalization()(second)
         second = Activation(AGENT_ACTIVATION)(second)
-
-        net_before = second
-        second = Conv2D(filters=8, kernel_size=(3, 3), padding="same", activation=None, name="second_skip_1")(
-            net_before)
-        second = BatchNormalization()(second)
-        second = Activation(AGENT_ACTIVATION)(second)
-
-        net_after = Add()([net_before, second])
-        second = net_after
-
-        net_before = second
-        second = Conv2D(filters=8, kernel_size=(3, 3), padding="same", activation=None, name="second_skip_2")(
-            net_before)
-        second = BatchNormalization()(second)
-        second = Activation(AGENT_ACTIVATION)(second)
-
-        net_after = Add()([net_before, second])
-        second = net_after
-
+        #
+        # net_before = second
+        # second = Conv2D(filters=8, kernel_size=(3, 3), padding="same", activation=None, name="second_skip_1")(
+        #     net_before)
+        # second = BatchNormalization()(second)
+        # second = Activation(AGENT_ACTIVATION)(second)
+        #
+        # net_after = Add()([net_before, second])
+        # second = net_after
+        #
+        # net_before = second
+        # second = Conv2D(filters=8, kernel_size=(3, 3), padding="same", activation=None, name="second_skip_2")(
+        #     net_before)
+        # second = BatchNormalization()(second)
+        # second = Activation(AGENT_ACTIVATION)(second)
+        #
+        # net_after = Add()([net_before, second])
+        # second = net_after
+        #
         third = Conv2D(filters=8, kernel_size=(4, 4), padding="same",
                        activation=None, name="third")(net)
         third = BatchNormalization()(third)
         third = Activation(AGENT_ACTIVATION)(third)
 
-        net_before = third
-        third = Conv2D(filters=8, kernel_size=(4, 4), padding="same", activation=None, name="third_skip_1")(
-            net_before)
-        third = BatchNormalization()(third)
-        third = Activation(AGENT_ACTIVATION)(third)
+        fourth = Conv2D(filters=8, kernel_size=(7, 7), padding="same",
+                       activation=None, name="fourth")(net)
+        fourth = BatchNormalization()(fourth)
+        fourth = Activation(AGENT_ACTIVATION)(fourth)
+        #
+        # net_before = third
+        # third = Conv2D(filters=8, kernel_size=(4, 4), padding="same", activation=None, name="third_skip_1")(
+        #     net_before)
+        # third = BatchNormalization()(third)
+        # third = Activation(AGENT_ACTIVATION)(third)
+        #
+        # net_after = Add()([net_before, third])
+        # third = net_after
+        #
+        # net_before = third
+        # third = Conv2D(filters=8, kernel_size=(4, 4), padding="same", activation=None, name="third_skip_2")(
+        #     net_before)
+        # third = BatchNormalization()(third)
+        # third = Activation(AGENT_ACTIVATION)(third)
+        #
+        # net_after = Add()([net_before, third])
+        # third = net_after
+        #
+        net = Concatenate(name="concat")([first, second, third,fourth])
 
-        net_after = Add()([net_before, third])
-        third = net_after
-
-        net_before = third
-        third = Conv2D(filters=8, kernel_size=(4, 4), padding="same", activation=None, name="third_skip_2")(
-            net_before)
-        third = BatchNormalization()(third)
-        third = Activation(AGENT_ACTIVATION)(third)
-
-        net_after = Add()([net_before, third])
-        third = net_after
-
-        net = Concatenate(name="concat")([first, second, third])
-
-        net = Conv2D(filters=16, kernel_size=(2, 2), padding="same",
+        net = Conv2D(filters=16, kernel_size=(7, 7), padding="same",
                      activation=None, name="first_decoder")(net)
         net = BatchNormalization()(net)
         net = Activation("linear")(net)
 
-        net = Conv2D(filters=8, kernel_size=(2, 2), padding="same",
+        net = Conv2D(filters=8, kernel_size=(4, 4), padding="same",
                      activation=None, name="second_decoder")(net)
         net = BatchNormalization()(net)
         net = Activation("linear")(net)
 
-        net = Conv2D(filters=1, kernel_size=(2, 2), padding="same",
+        net = Conv2D(filters=4, kernel_size=(4, 4), padding="same",
                      activation=None, name="third_decoder")(net)
+        net = BatchNormalization()(net)
+        net = Activation("linear")(net)
+
+        net = Conv2D(filters=1, kernel_size=(4, 4), padding="same",
+                     activation=None, name="4_decoder")(net)
         net = BatchNormalization()(net)
         net = Activation("linear")(net)
 
@@ -207,9 +199,9 @@ class Game_agent:
                 epoch += 1
                 s = new_s
                 self.model.compiled_metrics.reset_state()
-            self.train_network()
+            self.train_network(i%10==0)
 
-    def train_network(self):
+    def train_network(self,verbose):
         for i in range(len(self.memory) - 1, -1, -1):
             model_state = self.memory[i][0]
             a = self.memory[i][1]
@@ -227,13 +219,41 @@ class Game_agent:
             target_vec[0][a[0]][a[1]][0] = target
             self.train_step(self.model, model_state, target_vec)
             with self.summary_writer.as_default():
-                if i == 0:
+                if verbose and i == 0:
                     tf.summary.scalar("game_turn_amount", data=len(self.memory), step=1)
+                elif verbose and done:
+                    tf.summary.image("result", self.matrix_to_img(model_state[0, :, :, 0], reward, a), step=self.step)
+                    tf.summary.image("target_vec", self.matrix_to_img(target_vec[0, :, :, 0], reward, a), step=self.step)
                 tf.summary.scalar("reward_train", data=reward, step=1)
                 tf.summary.scalar("target_train", data=target, step=1)
                 for m in self.model.metrics:
                     tf.summary.scalar(m.name, data=float(m.result()), step=1)
+                self.step += 1
         self.memory.clear()
+
+    def matrix_to_img(self, data, reward, action):
+        fig, ax = plt.subplots()
+        im = ax.imshow(data)
+        # Loop over data dimensions and create text annotations.
+        for i in range(len(data)):
+            for j in range(len(data[i])):
+                value = data[i, j]
+                text = ax.text(j, i, round(value, 1),
+                               ha="center", va="center", color="w")
+        ax.set_title(f"reward:{reward}, action=[{action[0]}:{action[1]}]")
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png')
+        plt.close(fig)
+        buf.seek(0)
+
+        # Use tf.image.decode_png to convert the PNG buffer
+        # to a TF image. Make sure you use 4 channels.
+        image = tf.image.decode_png(buf.getvalue(), channels=4)
+
+        # Use tf.expand_dims to add the batch dimension
+        image = tf.expand_dims(image, 0)
+
+        return image
 
     @tf.function
     def train_step(self, model: Model, x, y):

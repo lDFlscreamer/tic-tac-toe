@@ -88,7 +88,7 @@ class Game_environment(gym.Env):
         done = done or diagonal_m[0]
         reward += MARK_COST * diagonal_m[1]
 
-        flip_diagonal = np.diag(np.fliplr(region), k=(local_x - local_y))
+        flip_diagonal = np.diag(np.fliplr(region), k=(region.shape[1]-1-local_x) - local_y)
         flip_diagonal_m = self.count_mark(flip_diagonal, MARK_CHAR)
         done = done or flip_diagonal_m[0]
         reward += MARK_COST * flip_diagonal_m[1]

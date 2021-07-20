@@ -9,7 +9,7 @@ import tensorflow as tf
 from numpy import unravel_index
 from tensorflow.keras.layers import *
 from tensorflow.keras.models import *
-
+from env.environment import LOSE_PENALTY,WIN_REWARD
 import CONSTANT
 
 AGENT_METRIC = 'mae'
@@ -217,8 +217,8 @@ class Game_agent:
             target_vec = self.model(model_state)
             target_vec = target_vec.numpy()
             abs_max = abs(max(target_vec.max(), target_vec.min(), key=abs))
-            if abs_max > 250:
-                target_vec = (target_vec / abs_max)*250
+            if abs_max > WIN_REWARD:
+                target_vec = (target_vec / abs_max)*WIN_REWARD
             target_vec[0][a[0]][a[1]][0] = target
             self.train_step(self.model, model_state, target_vec)
             with self.summary_writer.as_default():

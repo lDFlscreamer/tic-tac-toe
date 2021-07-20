@@ -22,7 +22,7 @@ class Game_agent:
         self.gamma = 0.4
         self.epsilon = 1
         self.epsilon_min = 0.06
-        self.epsilon_decay = 0.995
+        self.epsilon_decay = 0.999
         self.step = 0
 
         self.memory = list()
@@ -36,7 +36,7 @@ class Game_agent:
         input: Input = Input(shape=(CONSTANT.FIELD_SIZE, CONSTANT.FIELD_SIZE, 1), name="input")
         net = input
 
-        first = Conv2D(filters=8, kernel_size=(2, 2), padding="same",
+        first = Conv2D(filters=16, kernel_size=(3, 3), padding="same",
                        activation=None, name="first")(net)
         first = BatchNormalization()(first)
         first = Activation(AGENT_ACTIVATION)(first)
@@ -57,7 +57,7 @@ class Game_agent:
         # net_after = Add()([net_before, first])
         # first = net_after
         #
-        second = Conv2D(filters=8, kernel_size=(3, 3), padding="same",
+        second = Conv2D(filters=16, kernel_size=(5, 5), padding="same",
                         activation=None, name="second")(net)
         second = BatchNormalization()(second)
         second = Activation(AGENT_ACTIVATION)(second)
@@ -80,13 +80,13 @@ class Game_agent:
         # net_after = Add()([net_before, second])
         # second = net_after
         #
-        third = Conv2D(filters=8, kernel_size=(4, 4), padding="same",
+        third = Conv2D(filters=16, kernel_size=(7, 7), padding="same",
                        activation=None, name="third")(net)
         third = BatchNormalization()(third)
         third = Activation(AGENT_ACTIVATION)(third)
 
-        fourth = Conv2D(filters=8, kernel_size=(7, 7), padding="same",
-                       activation=None, name="fourth")(net)
+        fourth = Conv2D(filters=16, kernel_size=(CONSTANT.FIELD_SIZE, CONSTANT.FIELD_SIZE), padding="same",
+                        activation=None, name="fourth")(net)
         fourth = BatchNormalization()(fourth)
         fourth = Activation(AGENT_ACTIVATION)(fourth)
         #
@@ -108,25 +108,27 @@ class Game_agent:
         # net_after = Add()([net_before, third])
         # third = net_after
         #
-        net = Concatenate(name="concat")([first, second, third,fourth])
+        net = Concatenate(name="concat")([first, second, third])
 
-        net = Conv2D(filters=16, kernel_size=(7, 7), padding="same",
+        net = Conv2D(filters=32, kernel_size=(7, 7), padding="same",
                      activation=None, name="first_decoder")(net)
         net = BatchNormalization()(net)
         net = Activation("linear")(net)
 
-        net = Conv2D(filters=8, kernel_size=(4, 4), padding="same",
-                     activation=None, name="second_decoder")(net)
-        net = BatchNormalization()(net)
-        net = Activation("linear")(net)
-
-        net = Conv2D(filters=4, kernel_size=(4, 4), padding="same",
+        net = Conv2D(filters=16, kernel_size=(7, 7), padding="same",
                      activation=None, name="third_decoder")(net)
         net = BatchNormalization()(net)
         net = Activation("linear")(net)
 
-        net = Conv2D(filters=1, kernel_size=(4, 4), padding="same",
+        net = Concatenate(name="final_concat")([fourth, net])
+
+        net = Conv2D(filters=16, kernel_size=(8, 8), padding="same",
                      activation=None, name="4_decoder")(net)
+        net = BatchNormalization()(net)
+        net = Activation("linear")(net)
+
+        net = Conv2D(filters=1, kernel_size=(8, 8), padding="same",
+                     activation=None, name="5_decoder")(net)
         net = BatchNormalization()(net)
         net = Activation("linear")(net)
 
@@ -194,14 +196,12 @@ class Game_agent:
                 with self.summary_writer.as_default():
                     tf.summary.scalar("reward", data=r, step=1)
                     tf.summary.scalar("epsilon", data=self.epsilon, step=1)
-                if epoch % 10 == 0:
-                    print({m.name: float(m.result()) for m in self.model.metrics})
                 epoch += 1
                 s = new_s
                 self.model.compiled_metrics.reset_state()
-            self.train_network(i%10==0)
+            self.train_network(i % 50 == 0)
 
-    def train_network(self,verbose):
+    def train_network(self, verbose):
         for i in range(len(self.memory) - 1, -1, -1):
             model_state = self.memory[i][0]
             a = self.memory[i][1]
@@ -216,14 +216,18 @@ class Game_agent:
                 target = reward
             target_vec = self.model(model_state)
             target_vec = target_vec.numpy()
+            abs_max = abs(max(target_vec.max(), target_vec.min(), key=abs))
+            if abs_max > 250:
+                target_vec = (target_vec / abs_max)*250
             target_vec[0][a[0]][a[1]][0] = target
             self.train_step(self.model, model_state, target_vec)
             with self.summary_writer.as_default():
-                if verbose and i == 0:
+                if i == 0:
                     tf.summary.scalar("game_turn_amount", data=len(self.memory), step=1)
-                elif verbose and done:
+                if verbose and done:
                     tf.summary.image("result", self.matrix_to_img(model_state[0, :, :, 0], reward, a), step=self.step)
-                    tf.summary.image("target_vec", self.matrix_to_img(target_vec[0, :, :, 0], reward, a), step=self.step)
+                    tf.summary.image("target_vec", self.matrix_to_img(target_vec[0, :, :, 0], reward, a),
+                                     step=self.step)
                 tf.summary.scalar("reward_train", data=reward, step=1)
                 tf.summary.scalar("target_train", data=target, step=1)
                 for m in self.model.metrics:

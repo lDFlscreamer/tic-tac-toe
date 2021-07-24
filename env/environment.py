@@ -38,8 +38,9 @@ class Game_environment(gym.Env):
         reward = my_turn[1]
         if not my_turn[2]:
             state = my_turn[0]
+            opponent_state = np.stack([state * -1], axis=0)
             if self.opponent:
-                opponent_action = self.opponent(np.stack([state * -1], axis=0))[0, :, :, 0]
+                opponent_action = self.opponent(opponent_state)[0, :, :, 0]
                 opponent_action = opponent_action.numpy()
                 a = unravel_index(opponent_action.argmax(), opponent_action.shape)
                 # print(a)
@@ -48,9 +49,9 @@ class Game_environment(gym.Env):
             opponent_turn = self.do_turn(a, -1)
             if opponent_turn[2]:
                 reward = -LOSE_PENALTY
+            return opponent_turn[0], reward, opponent_turn[2], (opponent_state, a, opponent_turn[1], opponent_turn[2])
         else:
             return my_turn
-        return opponent_turn[0], reward, opponent_turn[2], {}
 
     def do_turn(self, action, MARK_CHAR):
         done = False
@@ -76,28 +77,28 @@ class Game_environment(gym.Env):
         line = region[:, local_x]
         line_m = self.count_mark(line, MARK_CHAR)
         done = done or line_m[0]
-        reward += MARK_COST * line_m[1]
+        reward =max(reward, MARK_COST * line_m[1])
 
         column = region[local_y, :]
         column_m = self.count_mark(column, MARK_CHAR)
         done = done or column_m[0]
-        reward += MARK_COST * column_m[1]
+        reward =max(reward, MARK_COST * column_m[1])
 
         diagonal = np.diag(region, k=(local_x - local_y))
         diagonal_m = self.count_mark(diagonal, MARK_CHAR)
         done = done or diagonal_m[0]
-        reward += MARK_COST * diagonal_m[1]
+        reward = max(reward,MARK_COST * diagonal_m[1])
 
-        flip_diagonal = np.diag(np.fliplr(region), k=(region.shape[1]-1-local_x) - local_y)
+        flip_diagonal = np.diag(np.fliplr(region), k=(region.shape[1] - 1 - local_x) - local_y)
         flip_diagonal_m = self.count_mark(flip_diagonal, MARK_CHAR)
         done = done or flip_diagonal_m[0]
-        reward += MARK_COST * flip_diagonal_m[1]
+        reward =max(reward, MARK_COST * flip_diagonal_m[1])
 
         if done:
             reward = WIN_REWARD
 
         obs = self.get_state()
-        return obs, reward, done, {}
+        return obs, reward, done, None
 
     def reset(self):
         # Reset the state of the environment to an initial state

@@ -9,8 +9,9 @@ import tensorflow as tf
 from numpy import unravel_index
 from tensorflow.keras.layers import *
 from tensorflow.keras.models import *
-from env.environment import LOSE_PENALTY,WIN_REWARD
+
 import CONSTANT
+from env.environment import WIN_REWARD
 
 AGENT_METRIC = 'mae'
 AGENT_ACTIVATION = "linear"
@@ -18,17 +19,17 @@ AGENT_ACTIVATION = "linear"
 
 class Game_agent:
 
-    def __init__(self):
+    def __init__(self, log_dir=None):
         self.gamma = 0.4
         self.epsilon = 1
         self.epsilon_min = 0.06
         self.epsilon_decay = 0.999
         self.step = 0
 
-        self.memory = list()
+        self.memory = {1: list(), -1: list()}
         self.model = self.get_bot()
-
-        log_dir = CONSTANT.TENSORBOARD_LOG_DIR + datetime.now().strftime("%Y%m%d-%H-%M-%S")
+        if not log_dir:
+            log_dir = CONSTANT.TENSORBOARD_REINFORCEMENT_LEARNING + datetime.now().strftime("%Y%m%d-%H-%M-%S")
         self.summary_writer = tf.summary.create_file_writer(logdir=log_dir)
 
     def create_model(self):
@@ -176,9 +177,11 @@ class Game_agent:
                     q_s = self.model(model_state)[0, :, :, 0]
                     q_s = q_s.numpy()
                     a = unravel_index(q_s.argmax(), q_s.shape)
-                new_s, r, done, _ = env.step(a)
+                new_s, r, done, opp = env.step(a)
 
-                self.memory.append((model_state, a, r, done))
+                self.memory[1].append((model_state, a, r, done))
+                if opp:
+                    self.memory[-1].append(opp)
                 # if not done:
                 #     model_new_state = np.stack([new_s], axis=0)
                 #     predict_new_state = self.model(model_new_state)[0, :, :, 0]
@@ -199,41 +202,43 @@ class Game_agent:
                 epoch += 1
                 s = new_s
                 self.model.compiled_metrics.reset_state()
-            self.train_network(i % 50 == 0)
+            self.train_network(self.model, self.memory[1], i % 50 == 0)
+            self.train_network(self.model, self.memory[-1], i % 50 == 0, '-1')
 
-    def train_network(self, verbose):
-        for i in range(len(self.memory) - 1, -1, -1):
-            model_state = self.memory[i][0]
-            a = self.memory[i][1]
-            reward = self.memory[i][2]
-            done = self.memory[i][3]
-            if not done:
-                new_m_state = self.memory[i + 1][0]
-                predict_new_state = self.model(new_m_state)[0, :, :, 0]
+    def train_network(self, model: Model, memory, verbose, char=''):
+        for i in range(len(memory) - 1, -1, -1):
+            model_state = memory[i][0]
+            a = memory[i][1]
+            reward = memory[i][2]
+            done = memory[i][3]
+            if not done and i + 1 <= len(memory) - 1:
+                new_m_state = memory[i + 1][0]
+                predict_new_state = model(new_m_state)[0, :, :, 0]
                 possible_reward = self.gamma * np.max(predict_new_state)
                 target = reward + self.gamma * possible_reward
             else:
                 target = reward
-            target_vec = self.model(model_state)
+            target_vec = model(model_state)
             target_vec = target_vec.numpy()
             abs_max = abs(max(target_vec.max(), target_vec.min(), key=abs))
             if abs_max > WIN_REWARD:
-                target_vec = (target_vec / abs_max)*WIN_REWARD
+                target_vec = (target_vec / abs_max) * WIN_REWARD
             target_vec[0][a[0]][a[1]][0] = target
-            self.train_step(self.model, model_state, target_vec)
+            self.train_step(model, model_state, target_vec)
             with self.summary_writer.as_default():
-                if i == 0:
-                    tf.summary.scalar("game_turn_amount", data=len(self.memory), step=1)
-                if verbose and done:
-                    tf.summary.image("result", self.matrix_to_img(model_state[0, :, :, 0], reward, a), step=self.step)
-                    tf.summary.image("target_vec", self.matrix_to_img(target_vec[0, :, :, 0], reward, a),
+                if i == 0 and char == '':
+                    tf.summary.scalar(f"game_turn_amount{char}", data=len(memory), step=1)
+                if verbose and i == len(memory) - 1:
+                    tf.summary.image(f"result{char}", self.matrix_to_img(model_state[0, :, :, 0], reward, a),
                                      step=self.step)
-                tf.summary.scalar("reward_train", data=reward, step=1)
-                tf.summary.scalar("target_train", data=target, step=1)
-                for m in self.model.metrics:
+                    tf.summary.image(f"target_vec{char}", self.matrix_to_img(target_vec[0, :, :, 0], reward, a),
+                                     step=self.step)
+                tf.summary.scalar(f"reward_train{char}", data=reward, step=1)
+                tf.summary.scalar(f"target_train{char}", data=target, step=1)
+                for m in model.metrics:
                     tf.summary.scalar(m.name, data=float(m.result()), step=1)
-                self.step += 1
-        self.memory.clear()
+            self.step += 1
+        memory.clear()
 
     def matrix_to_img(self, data, reward, action):
         fig, ax = plt.subplots()

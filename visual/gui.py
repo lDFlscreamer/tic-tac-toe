@@ -1,6 +1,10 @@
+from datetime import datetime
 from tkinter import Tk, Label, Button, StringVar, Frame
 
+import numpy as np
+
 import CONSTANT
+from agent.agent import Game_agent
 from env.environment import Game_environment
 
 
@@ -16,6 +20,8 @@ class TicTacToeGUI:
 
         self.buttons = []
         self.env = Game_environment()
+        self.memory = {1: list(), -1: list()}
+        self.agent = Game_agent(CONSTANT.TENSORBOARD_GUI + datetime.now().strftime("%Y%m%d-%H"))
         if not self.env.opponent:
             raise ValueError
         # Making the background of the window as white#Displaying the player
@@ -41,9 +47,17 @@ class TicTacToeGUI:
     def changeVal(self, row, col):
         if self.end:
             return
-        step = self.env.step((row, col))
+        action = (row, col)
+        step = self.env.step(action)
+        state = np.stack([step[0]], axis=0)
+        self.memory[1].append((state, action, step[1], step[2]))
+        step_ = step[3]
+        if step_:
+            self.memory[-1].append(step_)
         if step[2]:
             self.end = step[2]
+            self.agent.train_network(self.env.opponent, self.memory[1], True)
+            self.agent.train_network(self.env.opponent, self.memory[-1], True, '-1')
             print('end')
         self.score += step[1]
         self.update_score()

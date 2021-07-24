@@ -6,7 +6,7 @@ a = Game_agent()
 g.opponent = a.get_bot()
 epsilon = 1
 decay = 0.95
-for i in range(0, 500):
+for i in range(0, 150):
     epsilon = 1 * pow(decay, i)
     for j in range(0, 80):
         print(f'try i={i}  j={j}')

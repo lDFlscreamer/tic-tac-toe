@@ -116,22 +116,24 @@ class Game_agent:
         net = BatchNormalization()(net)
         net = Activation("linear")(net)
 
-        net = Conv2D(filters=16, kernel_size=(7, 7), padding="same",
-                     activation=None, name="third_decoder")(net)
-        net = BatchNormalization()(net)
-        net = Activation("linear")(net)
-
-        net = Concatenate(name="final_concat")([fourth, net])
-
-        net = Conv2D(filters=16, kernel_size=(8, 8), padding="same",
-                     activation=None, name="4_decoder")(net)
-        net = BatchNormalization()(net)
-        net = Activation("linear")(net)
+        net = Concatenate(name="final_concat")([net, fourth])
 
         net = Conv2D(filters=1, kernel_size=(8, 8), padding="same",
                      activation=None, name="5_decoder")(net)
         net = BatchNormalization()(net)
         net = Activation("linear")(net)
+
+        net = Flatten()(net)
+        net = Dense(256, activation=None, )(net)
+        net = Activation("linear")(net)
+
+        net = Dense(256, activation=None, )(net)
+        net = Activation("linear")(net)
+
+        net = Dense(CONSTANT.FIELD_SIZE * CONSTANT.FIELD_SIZE, activation=None)(net)
+        net = Activation("linear")(net)
+
+        net = Reshape((CONSTANT.FIELD_SIZE, CONSTANT.FIELD_SIZE))(net)
 
         model = Model(inputs=input, outputs=net)
         model.compile(loss="mse",
@@ -174,7 +176,7 @@ class Game_agent:
                 if np.random.random() < self.epsilon:
                     a = env.action_space.sample()
                 else:
-                    q_s = self.model(model_state)[0, :, :, 0]
+                    q_s = self.model(model_state)[0, :, :]
                     q_s = q_s.numpy()
                     a = unravel_index(q_s.argmax(), q_s.shape)
                 new_s, r, done, opp = env.step(a)
@@ -213,7 +215,7 @@ class Game_agent:
             done = memory[i][3]
             if not done and i + 1 <= len(memory) - 1:
                 new_m_state = memory[i + 1][0]
-                predict_new_state = model(new_m_state)[0, :, :, 0]
+                predict_new_state = model(new_m_state)[0, :, :]
                 possible_reward = self.gamma * np.max(predict_new_state)
                 target = reward + self.gamma * possible_reward
             else:
@@ -223,15 +225,15 @@ class Game_agent:
             abs_max = abs(max(target_vec.max(), target_vec.min(), key=abs))
             if abs_max > WIN_REWARD:
                 target_vec = (target_vec / abs_max) * WIN_REWARD
-            target_vec[0][a[0]][a[1]][0] = target
+            target_vec[0][a[0]][a[1]] = target
             self.train_step(model, model_state, target_vec)
             with self.summary_writer.as_default():
                 if i == 0 and char == '':
                     tf.summary.scalar(f"game_turn_amount{char}", data=len(memory), step=1)
                 if verbose and i == len(memory) - 1:
-                    tf.summary.image(f"result{char}", self.matrix_to_img(model_state[0, :, :, 0], reward, a),
+                    tf.summary.image(f"result{char}", self.matrix_to_img(model_state[0, :, :], reward, a),
                                      step=self.step)
-                    tf.summary.image(f"target_vec{char}", self.matrix_to_img(target_vec[0, :, :, 0], reward, a),
+                    tf.summary.image(f"target_vec{char}", self.matrix_to_img(target_vec[0, :, :], reward, a),
                                      step=self.step)
                 tf.summary.scalar(f"reward_train{char}", data=reward, step=1)
                 tf.summary.scalar(f"target_train{char}", data=target, step=1)

@@ -21,7 +21,7 @@ class TicTacToeGUI:
         self.buttons = []
         self.env = Game_environment()
         self.memory = {1: list(), -1: list()}
-        self.agent = Game_agent(CONSTANT.TENSORBOARD_GUI + datetime.now().strftime("%Y%m%d-%H"))
+        self.agent = Game_agent(CONSTANT.TENSORBOARD_GUI + datetime.now().strftime("%Y%m%d-%H-%M-%S"))
         if not self.env.opponent:
             raise ValueError
         # Making the background of the window as white#Displaying the player

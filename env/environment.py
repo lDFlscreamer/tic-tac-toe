@@ -21,7 +21,7 @@ LOSE_PENALTY = 250
 class Game_environment(gym.Env):
     def __init__(self):
         super(Game_environment, self).__init__()
-        self.state = np.zeros(shape=(CONSTANT.FIELD_SIZE, CONSTANT.FIELD_SIZE, 1), dtype=np.int)
+        self.state = np.zeros(shape=(CONSTANT.FIELD_SIZE, CONSTANT.FIELD_SIZE), dtype=np.int)
         self.opponent = self.get_oponent()
         self.action_space = spaces.Box(low=0, high=CONSTANT.FIELD_SIZE - 1, shape=(2,), dtype=np.int)
 
@@ -40,7 +40,7 @@ class Game_environment(gym.Env):
             state = my_turn[0]
             opponent_state = np.stack([state * -1], axis=0)
             if self.opponent:
-                opponent_action = self.opponent(opponent_state)[0, :, :, 0]
+                opponent_action = self.opponent(opponent_state)[0, :, :]
                 opponent_action = opponent_action.numpy()
                 a = unravel_index(opponent_action.argmax(), opponent_action.shape)
                 # print(a)
@@ -57,19 +57,19 @@ class Game_environment(gym.Env):
         done = False
         line = action[0]
         column = action[1]
-        if np.count_nonzero(self.state[:, :, 0] == 0) == 0:
+        if np.count_nonzero(self.state[:, :] == 0) == 0:
             return self.get_state(), 0, True, {}
-        if self.state[line][column][0] != 0:
+        if self.state[line][column] != 0:
             return self.get_state(), -NOT_EMPTY_PENALTY, done, {}
 
-        self.state[line][column][0] = MARK_CHAR
+        self.state[line][column] = MARK_CHAR
         reward = 0
         y_up = max(line - 3, 0)
         y_down = min(line + 3 + 1, CONSTANT.FIELD_SIZE)
         X_left = max(column - 3, 0)
         x_right = min(column + 3 + 1, CONSTANT.FIELD_SIZE)
 
-        region = self.state[y_up:y_down, X_left:x_right, 0]
+        region = self.state[y_up:y_down, X_left:x_right]
 
         local_y = line - y_up
         local_x = column - X_left
@@ -102,7 +102,7 @@ class Game_environment(gym.Env):
 
     def reset(self):
         # Reset the state of the environment to an initial state
-        self.state = np.zeros(shape=(CONSTANT.FIELD_SIZE, CONSTANT.FIELD_SIZE, 1), dtype=np.int)
+        self.state = np.zeros(shape=(CONSTANT.FIELD_SIZE, CONSTANT.FIELD_SIZE), dtype=np.int)
         return self.get_state()
 
     def get_state(self):

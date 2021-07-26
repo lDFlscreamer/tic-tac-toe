@@ -8,7 +8,7 @@ epsilon = 1
 decay = 0.95
 for i in range(0, 150):
     epsilon = 1 * pow(decay, i)
-    for j in range(0, 80):
+    for j in range(0, 180):
         print(f'try i={i}  j={j}')
         a.epsilon = epsilon * pow(decay, j)
         g.opponent = g.get_oponent()

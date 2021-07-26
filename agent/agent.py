@@ -37,97 +37,36 @@ class Game_agent:
         input: Input = Input(shape=(CONSTANT.FIELD_SIZE, CONSTANT.FIELD_SIZE, 1), name="input")
         net = input
 
-        first = Conv2D(filters=16, kernel_size=(3, 3), padding="same",
+        first = Conv2D(filters=8, kernel_size=(3, 3), padding="same",
                        activation=None, name="first")(net)
         first = BatchNormalization()(first)
         first = Activation(AGENT_ACTIVATION)(first)
-        #
-        # net_before = first
-        # first = Conv2D(filters=8, kernel_size=(2, 2), padding="same", activation=None, name="first_skip_1")(net_before)
-        # first = BatchNormalization()(first)
-        # first = Activation(AGENT_ACTIVATION)(first)
-        #
-        # net_after = Add()([net_before, first])
-        # first = net_after
-        #
-        # net_before = first
-        # first = Conv2D(filters=8, kernel_size=(2, 2), padding="same", activation=None, name="first_skip_2")(net_before)
-        # first = BatchNormalization()(first)
-        # first = Activation(AGENT_ACTIVATION)(first)
-        #
-        # net_after = Add()([net_before, first])
-        # first = net_after
-        #
-        second = Conv2D(filters=16, kernel_size=(5, 5), padding="same",
+
+        second = Conv2D(filters=8, kernel_size=(5, 5), padding="same",
                         activation=None, name="second")(net)
         second = BatchNormalization()(second)
         second = Activation(AGENT_ACTIVATION)(second)
-        #
-        # net_before = second
-        # second = Conv2D(filters=8, kernel_size=(3, 3), padding="same", activation=None, name="second_skip_1")(
-        #     net_before)
-        # second = BatchNormalization()(second)
-        # second = Activation(AGENT_ACTIVATION)(second)
-        #
-        # net_after = Add()([net_before, second])
-        # second = net_after
-        #
-        # net_before = second
-        # second = Conv2D(filters=8, kernel_size=(3, 3), padding="same", activation=None, name="second_skip_2")(
-        #     net_before)
-        # second = BatchNormalization()(second)
-        # second = Activation(AGENT_ACTIVATION)(second)
-        #
-        # net_after = Add()([net_before, second])
-        # second = net_after
-        #
-        third = Conv2D(filters=16, kernel_size=(7, 7), padding="same",
+
+        third = Conv2D(filters=8, kernel_size=(7, 7), padding="same",
                        activation=None, name="third")(net)
         third = BatchNormalization()(third)
         third = Activation(AGENT_ACTIVATION)(third)
 
-        fourth = Conv2D(filters=16, kernel_size=(CONSTANT.FIELD_SIZE, CONSTANT.FIELD_SIZE), padding="same",
-                        activation=None, name="fourth")(net)
-        fourth = BatchNormalization()(fourth)
-        fourth = Activation(AGENT_ACTIVATION)(fourth)
-        #
-        # net_before = third
-        # third = Conv2D(filters=8, kernel_size=(4, 4), padding="same", activation=None, name="third_skip_1")(
-        #     net_before)
-        # third = BatchNormalization()(third)
-        # third = Activation(AGENT_ACTIVATION)(third)
-        #
-        # net_after = Add()([net_before, third])
-        # third = net_after
-        #
-        # net_before = third
-        # third = Conv2D(filters=8, kernel_size=(4, 4), padding="same", activation=None, name="third_skip_2")(
-        #     net_before)
-        # third = BatchNormalization()(third)
-        # third = Activation(AGENT_ACTIVATION)(third)
-        #
-        # net_after = Add()([net_before, third])
-        # third = net_after
-        #
-        net = Concatenate(name="concat")([first, second, third])
+        net = Concatenate(name="concat1")([first, second, third])
 
-        net = Conv2D(filters=32, kernel_size=(7, 7), padding="same",
-                     activation=None, name="first_decoder")(net)
+        net = Conv2D(filters=3, kernel_size=(7, 7), padding="same",
+                       activation=None)(net)
         net = BatchNormalization()(net)
-        net = Activation("linear")(net)
+        net = Activation(AGENT_ACTIVATION)(net)
 
-        net = Concatenate(name="final_concat")([net, fourth])
-
-        net = Conv2D(filters=1, kernel_size=(8, 8), padding="same",
-                     activation=None, name="5_decoder")(net)
-        net = BatchNormalization()(net)
-        net = Activation("linear")(net)
+        net = Concatenate(name="concat2")([net, input])
 
         net = Flatten()(net)
+
         net = Dense(256, activation=None, )(net)
         net = Activation("linear")(net)
 
-        net = Dense(256, activation=None, )(net)
+        net = Dense(128, activation=None, )(net)
         net = Activation("linear")(net)
 
         net = Dense(CONSTANT.FIELD_SIZE * CONSTANT.FIELD_SIZE, activation=None)(net)

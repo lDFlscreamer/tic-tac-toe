@@ -22,8 +22,8 @@ class Game_agent:
     def __init__(self, log_dir=None):
         self.gamma = 0.4
         self.epsilon = 1
-        self.epsilon_min = 0.06
-        self.epsilon_decay = 0.999
+        self.epsilon_min = 0.002
+        self.epsilon_decay = 0.99
         self.step = 0
 
         self.memory = {1: list(), -1: list()}
@@ -37,31 +37,27 @@ class Game_agent:
         input: Input = Input(shape=(CONSTANT.FIELD_SIZE, CONSTANT.FIELD_SIZE, 1), name="input")
         net = input
 
-        first = Conv2D(filters=8, kernel_size=(3, 3), padding="same",
+        first = Conv2D(filters=3, kernel_size=(3, 3), padding="valid",
                        activation=None, name="first")(net)
         first = BatchNormalization()(first)
         first = Activation(AGENT_ACTIVATION)(first)
 
-        second = Conv2D(filters=8, kernel_size=(5, 5), padding="same",
+        second = Conv2D(filters=3, kernel_size=(5, 5), padding="valid",
                         activation=None, name="second")(net)
         second = BatchNormalization()(second)
         second = Activation(AGENT_ACTIVATION)(second)
 
-        third = Conv2D(filters=8, kernel_size=(7, 7), padding="same",
+        third = Conv2D(filters=3, kernel_size=(7, 7), padding="valid",
                        activation=None, name="third")(net)
         third = BatchNormalization()(third)
         third = Activation(AGENT_ACTIVATION)(third)
 
+        first = Flatten()(first)
+        second = Flatten()(second)
+        third = Flatten()(third)
         net = Concatenate(name="concat1")([first, second, third])
 
-        net = Conv2D(filters=3, kernel_size=(7, 7), padding="same",
-                       activation=None)(net)
-        net = BatchNormalization()(net)
-        net = Activation(AGENT_ACTIVATION)(net)
-
-        net = Concatenate(name="concat2")([net, input])
-
-        net = Flatten()(net)
+        # net = Flatten()(net)
 
         net = Dense(256, activation=None, )(net)
         net = Activation("linear")(net)

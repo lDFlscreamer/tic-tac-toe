@@ -37,25 +37,12 @@ class Game_agent:
         input: Input = Input(shape=(CONSTANT.FIELD_SIZE, CONSTANT.FIELD_SIZE, 1), name="input")
         net = input
 
-        first = Conv2D(filters=3, kernel_size=(3, 3), padding="valid",
-                       activation=None, name="first")(net)
-        first = BatchNormalization()(first)
-        first = Activation(AGENT_ACTIVATION)(first)
-
-        second = Conv2D(filters=3, kernel_size=(5, 5), padding="valid",
-                        activation=None, name="second")(net)
-        second = BatchNormalization()(second)
-        second = Activation(AGENT_ACTIVATION)(second)
-
-        third = Conv2D(filters=3, kernel_size=(7, 7), padding="valid",
+        third = Conv2D(filters=24, kernel_size=(7, 7), padding="same",
                        activation=None, name="third")(net)
         third = BatchNormalization()(third)
         third = Activation(AGENT_ACTIVATION)(third)
 
-        first = Flatten()(first)
-        second = Flatten()(second)
-        third = Flatten()(third)
-        net = Concatenate(name="concat1")([first, second, third])
+        net = Flatten()(third)
 
         # net = Flatten()(net)
 

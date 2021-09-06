@@ -23,7 +23,9 @@ class Game_agent:
         self.gamma = 0.4
         self.epsilon = 1
         self.epsilon_min = 0.002
-        self.epsilon_decay = 0.99
+        self.epsilon_decay = 0.9995
+        self.save_frequency = 50
+        self.image_verbose_frequency = 50
         self.step = 0
 
         self.memory = {1: list(), -1: list()}
@@ -36,6 +38,11 @@ class Game_agent:
         # todo: model architecture
         input: Input = Input(shape=(CONSTANT.FIELD_SIZE, CONSTANT.FIELD_SIZE, 1), name="input")
         net = input
+
+        first_part = tf.math.greater_equal(input, tf.constant([1]))
+        second_part = tf.math.greater_equal(input * (-1), tf.constant([1]))
+
+        input = Concatenate()([first_part, second_part])
 
         third = Conv2D(filters=24, kernel_size=(7, 7), padding="same",
                        activation=None, name="third")(net)
@@ -88,7 +95,7 @@ class Game_agent:
             s = env.reset()
             self.epsilon *= self.epsilon_decay
             self.epsilon = max(self.epsilon_min, self.epsilon)
-            if i % 50 == 0:
+            if i % max(self.save_frequency, 1) == 0:
                 print("Episode {} of {}".format(i + 1, num_episodes))
                 self.model.save(CONSTANT.AGENT_TEMP_MODEL_PATH)
                 print('save %d version' % i)
@@ -104,6 +111,9 @@ class Game_agent:
                 new_s, r, done, opp = env.step(a)
 
                 self.memory[1].append((model_state, a, r, done))
+                if done:
+                    last_O = self.memory[-1][-1]
+                    self.memory[-1][-1] = (last_O[0], last_O[1], -250, last_O[3])
                 if opp:
                     self.memory[-1].append(opp)
                 # if not done:
@@ -126,10 +136,11 @@ class Game_agent:
                 epoch += 1
                 s = new_s
                 self.model.compiled_metrics.reset_state()
-            self.train_network(self.model, self.memory[1], i % 50 == 0)
-            self.train_network(self.model, self.memory[-1], i % 50 == 0, '-1')
+            is_verbose = (i % self.image_verbose_frequency == 0)
+            self.train_network(self.model, self.memory[1], is_verbose)
+            self.train_network(self.model, self.memory[-1], is_verbose, '-1')
 
-    def train_network(self, model: Model, memory, verbose, char=''):
+    def train_network(self, model: Model, memory, is_verbose, char=''):
         for i in range(len(memory) - 1, -1, -1):
             model_state = memory[i][0]
             a = memory[i][1]
@@ -152,7 +163,7 @@ class Game_agent:
             with self.summary_writer.as_default():
                 if i == 0 and char == '':
                     tf.summary.scalar(f"game_turn_amount{char}", data=len(memory), step=1)
-                if verbose and i == len(memory) - 1:
+                if is_verbose and i == len(memory) - 1:
                     tf.summary.image(f"result{char}", self.matrix_to_img(model_state[0, :, :], reward, a),
                                      step=self.step)
                     tf.summary.image(f"target_vec{char}", self.matrix_to_img(target_vec[0, :, :], reward, a),

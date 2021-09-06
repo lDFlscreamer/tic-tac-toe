@@ -39,10 +39,10 @@ class Game_agent:
         input: Input = Input(shape=(CONSTANT.FIELD_SIZE, CONSTANT.FIELD_SIZE, 1), name="input")
         net = input
 
-        first_part = tf.math.greater_equal(input, tf.constant([1]))
-        second_part = tf.math.greater_equal(input * (-1), tf.constant([1]))
-
-        input = Concatenate()([first_part, second_part])
+        # first_part = tf.math.greater_equal(input, tf.constant([1]))
+        # second_part = tf.math.greater_equal(input * (-1), tf.constant([1]))
+        #
+        # input = Concatenate()([first_part, second_part])
 
         third = Conv2D(filters=24, kernel_size=(7, 7), padding="same",
                        activation=None, name="third")(net)

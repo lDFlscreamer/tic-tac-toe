@@ -23,7 +23,7 @@ class Game_agent:
         self.gamma = 0.4
         self.epsilon = 1
         self.epsilon_min = 0.002
-        self.epsilon_decay = 0.9995
+        self.epsilon_decay = 0.995
         self.save_frequency = 50
         self.image_verbose_frequency = 50
         self.step = 0
@@ -37,12 +37,15 @@ class Game_agent:
     def create_model(self):
         # todo: model architecture
         input: Input = Input(shape=(CONSTANT.FIELD_SIZE, CONSTANT.FIELD_SIZE, 1), name="input")
-        net = input
 
-        # first_part = tf.math.greater_equal(input, tf.constant([1]))
-        # second_part = tf.math.greater_equal(input * (-1), tf.constant([1]))
-        #
-        # input = Concatenate()([first_part, second_part])
+        first_part = tf.math.greater_equal(input, tf.constant(1, tf.float32))
+        first_part = tf.cast(first_part, tf.float32)
+
+        second_part = tf.math.greater_equal(input * (-1), tf.constant(1, tf.float32))
+        second_part = tf.cast(second_part, tf.float32)
+
+        two_channel_state = Concatenate(name="two_channel_state")([first_part, second_part])
+        net = two_channel_state
 
         third = Conv2D(filters=24, kernel_size=(7, 7), padding="same",
                        activation=None, name="third")(net)
@@ -51,15 +54,13 @@ class Game_agent:
 
         net = Flatten()(third)
 
-        # net = Flatten()(net)
-
-        net = Dense(256, activation=None, )(net)
+        net = Dense(256, activation=None, name="first_dense")(net)
         net = Activation("linear")(net)
 
-        net = Dense(128, activation=None, )(net)
+        net = Dense(128, activation=None, name="second_dense")(net)
         net = Activation("linear")(net)
 
-        net = Dense(CONSTANT.FIELD_SIZE * CONSTANT.FIELD_SIZE, activation=None)(net)
+        net = Dense(CONSTANT.FIELD_SIZE * CONSTANT.FIELD_SIZE, activation=None, name="output")(net)
         net = Activation("linear")(net)
 
         net = Reshape((CONSTANT.FIELD_SIZE, CONSTANT.FIELD_SIZE))(net)
@@ -85,7 +86,8 @@ class Game_agent:
         model.compile(loss="mse",
                       optimizer='adam',
                       metrics=[
-                          AGENT_METRIC
+                          AGENT_METRIC,
+                          "mse"
                       ])
         return model
 
@@ -135,7 +137,7 @@ class Game_agent:
                     tf.summary.scalar("epsilon", data=self.epsilon, step=1)
                 epoch += 1
                 s = new_s
-                self.model.compiled_metrics.reset_state()
+            self.model.compiled_metrics.reset_state()
             is_verbose = (i % self.image_verbose_frequency == 0)
             self.train_network(self.model, self.memory[1], is_verbose)
             self.train_network(self.model, self.memory[-1], is_verbose, '-1')
@@ -160,6 +162,7 @@ class Game_agent:
                 target_vec = (target_vec / abs_max) * WIN_REWARD
             target_vec[0][a[0]][a[1]] = target
             self.train_step(model, model_state, target_vec)
+            # self.model.fit(model_state, target_vec, verbose=0)
             with self.summary_writer.as_default():
                 if i == 0 and char == '':
                     tf.summary.scalar(f"game_turn_amount{char}", data=len(memory), step=1)

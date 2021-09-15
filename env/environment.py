@@ -2,6 +2,7 @@ import os
 
 import gym
 import numpy as np
+import tensorflow as tf
 from gym import spaces
 from keras.models import load_model
 from numpy import unravel_index
@@ -12,7 +13,7 @@ import CONSTANT
 # EMPTY = 0
 # O = -1
 
-MARK_COST = 1
+MARK_COST = 10
 NOT_EMPTY_PENALTY = 100
 WIN_REWARD = 250
 LOSE_PENALTY = 250
@@ -77,22 +78,22 @@ class Game_environment(gym.Env):
         line = region[:, local_x]
         line_m = self.count_mark(line, MARK_CHAR)
         done = done or line_m[0]
-        reward =max(reward, MARK_COST * line_m[1])
+        reward = max(reward, self.reward_function(line_m[1]))
 
         column = region[local_y, :]
         column_m = self.count_mark(column, MARK_CHAR)
         done = done or column_m[0]
-        reward =max(reward, MARK_COST * column_m[1])
+        reward = max(reward, self.reward_function(column_m[1]))
 
         diagonal = np.diag(region, k=(local_x - local_y))
         diagonal_m = self.count_mark(diagonal, MARK_CHAR)
         done = done or diagonal_m[0]
-        reward = max(reward,MARK_COST * diagonal_m[1])
+        reward = max(reward, self.reward_function(diagonal_m[1]))
 
         flip_diagonal = np.diag(np.fliplr(region), k=(region.shape[1] - 1 - local_x) - local_y)
         flip_diagonal_m = self.count_mark(flip_diagonal, MARK_CHAR)
         done = done or flip_diagonal_m[0]
-        reward =max(reward, MARK_COST * flip_diagonal_m[1])
+        reward = max(reward, self.reward_function(flip_diagonal_m[1]))
 
         if done:
             reward = WIN_REWARD
@@ -117,3 +118,10 @@ class Game_environment(gym.Env):
                 if count == 4:
                     return True, 4
         return False, count
+
+    @tf.function
+    def reward_function(self, amount_of_mark):
+        result = 0
+        for x in range(1, amount_of_mark + 1):
+            result = result + (x * MARK_COST)
+        return result

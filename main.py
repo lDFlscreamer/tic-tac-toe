@@ -7,9 +7,9 @@ g.opponent = a.get_bot()
 
 # a.epsilon_decay = 1  # <1 for dynamical change inside train process
 epsilon = 1
-decay = 0.998
+decay = 0.99
 initial_i = 0  # last  i value
-initial_j = 0  # last j value 42
+initial_j = 112  # last j value
 a.save_frequency = 50
 a.image_verbose_frequency = 50
 for i in range(initial_i, 250):

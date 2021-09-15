@@ -11,7 +11,7 @@ from tensorflow.keras.layers import *
 from tensorflow.keras.models import *
 
 import CONSTANT
-from env.environment import WIN_REWARD
+from env.environment import WIN_REWARD,LOSE_PENALTY
 
 AGENT_METRIC = 'mae'
 AGENT_ACTIVATION = "linear"
@@ -115,23 +115,9 @@ class Game_agent:
                 self.memory[1].append((model_state, a, r, done))
                 if done:
                     last_O = self.memory[-1][-1]
-                    self.memory[-1][-1] = (last_O[0], last_O[1], -250, last_O[3])
+                    self.memory[-1][-1] = (last_O[0], last_O[1], -LOSE_PENALTY, last_O[3])
                 if opp:
                     self.memory[-1].append(opp)
-                # if not done:
-                #     model_new_state = np.stack([new_s], axis=0)
-                #     predict_new_state = self.model(model_new_state)[0, :, :, 0]
-                #     possible_reward = self.gamma * np.max(predict_new_state)
-                #     target = r + self.gamma * possible_reward
-                # else:
-                #     target = r
-                # target_vec = self.model(model_state)
-                # target_vec = target_vec.numpy()
-                # target_vec[0][a[0]][a[1]][0] = target
-                # self.model.fit(model_state, target_vec, initial_epoch=epoch, epochs=1, verbose=1,
-                #                callbacks=self.get_callbacks(epoch))
-                # self.train_step(self.model, model_state, target_vec)
-
                 with self.summary_writer.as_default():
                     tf.summary.scalar("reward", data=r, step=1)
                     tf.summary.scalar("epsilon", data=self.epsilon, step=1)

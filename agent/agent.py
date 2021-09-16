@@ -11,7 +11,7 @@ from tensorflow.keras.layers import *
 from tensorflow.keras.models import *
 
 import CONSTANT
-from env.environment import WIN_REWARD,LOSE_PENALTY
+from env.environment import WIN_REWARD, LOSE_PENALTY
 
 AGENT_METRIC = 'mae'
 AGENT_ACTIVATION = "linear"
@@ -53,12 +53,15 @@ class Game_agent:
         third = Activation(AGENT_ACTIVATION)(third)
 
         net = Flatten()(third)
+        net = Dropout(0.2)(net)
 
         net = Dense(256, activation=None, name="first_dense")(net)
         net = Activation("linear")(net)
+        net = Dropout(0.4)(net)
 
         net = Dense(128, activation=None, name="second_dense")(net)
         net = Activation("linear")(net)
+        net = Dropout(0.4)(net)
 
         net = Dense(CONSTANT.FIELD_SIZE * CONSTANT.FIELD_SIZE, activation=None, name="output")(net)
         net = Activation("linear")(net)

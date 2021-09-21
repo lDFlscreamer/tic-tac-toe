@@ -9,8 +9,9 @@ import tensorflow as tf
 from numpy import unravel_index
 from tensorflow.keras.layers import *
 from tensorflow.keras.models import *
-from env.environment import LOSE_PENALTY,WIN_REWARD
+
 import CONSTANT
+from env.environment import WIN_REWARD, LOSE_PENALTY
 
 AGENT_METRIC = 'mae'
 AGENT_ACTIVATION = "linear"
@@ -18,119 +19,77 @@ AGENT_ACTIVATION = "linear"
 
 class Game_agent:
 
-    def __init__(self):
+    def __init__(self, log_dir=None):
         self.gamma = 0.4
         self.epsilon = 1
-        self.epsilon_min = 0.06
-        self.epsilon_decay = 0.999
+        self.epsilon_min = 0.002
+        self.epsilon_decay = 0.995
+        self.save_frequency = 50
+        self.image_verbose_frequency = 50
+        self.NN_verbose_frequency = 50
         self.step = 0
 
-        self.memory = list()
+        self.memory = {1: list(), -1: list()}
         self.model = self.get_bot()
-
-        log_dir = CONSTANT.TENSORBOARD_LOG_DIR + datetime.now().strftime("%Y%m%d-%H-%M-%S")
+        if not log_dir:
+            log_dir = CONSTANT.TENSORBOARD_REINFORCEMENT_LEARNING + datetime.now().strftime("%Y%m%d-%H-%M-%S")
         self.summary_writer = tf.summary.create_file_writer(logdir=log_dir)
 
     def create_model(self):
         # todo: model architecture
         input: Input = Input(shape=(CONSTANT.FIELD_SIZE, CONSTANT.FIELD_SIZE, 1), name="input")
-        net = input
 
-        first = Conv2D(filters=16, kernel_size=(3, 3), padding="same",
-                       activation=None, name="first")(net)
-        first = BatchNormalization()(first)
+        first_part = tf.math.greater_equal(input, tf.constant(1, tf.float32))
+        first_part = tf.cast(first_part, tf.float32)
+
+        second_part = tf.math.greater_equal(input * (-1), tf.constant(1, tf.float32))
+        second_part = tf.cast(second_part, tf.float32)
+
+        two_channel_state = Concatenate(name="two_channel_state")([first_part, second_part])
+        net = two_channel_state
+
+        first = Conv2D(filters=4, kernel_size=(3, 3), padding="valid",
+                       activation=None, name="CNN_first")(net)
         first = Activation(AGENT_ACTIVATION)(first)
-        #
-        # net_before = first
-        # first = Conv2D(filters=8, kernel_size=(2, 2), padding="same", activation=None, name="first_skip_1")(net_before)
-        # first = BatchNormalization()(first)
-        # first = Activation(AGENT_ACTIVATION)(first)
-        #
-        # net_after = Add()([net_before, first])
-        # first = net_after
-        #
-        # net_before = first
-        # first = Conv2D(filters=8, kernel_size=(2, 2), padding="same", activation=None, name="first_skip_2")(net_before)
-        # first = BatchNormalization()(first)
-        # first = Activation(AGENT_ACTIVATION)(first)
-        #
-        # net_after = Add()([net_before, first])
-        # first = net_after
-        #
-        second = Conv2D(filters=16, kernel_size=(5, 5), padding="same",
-                        activation=None, name="second")(net)
-        second = BatchNormalization()(second)
+        first = Flatten()(first)
+
+        second = Conv2D(filters=8, kernel_size=(5, 5), padding="valid",
+                        activation=None, name="CNN_second")(net)
         second = Activation(AGENT_ACTIVATION)(second)
-        #
-        # net_before = second
-        # second = Conv2D(filters=8, kernel_size=(3, 3), padding="same", activation=None, name="second_skip_1")(
-        #     net_before)
-        # second = BatchNormalization()(second)
-        # second = Activation(AGENT_ACTIVATION)(second)
-        #
-        # net_after = Add()([net_before, second])
-        # second = net_after
-        #
-        # net_before = second
-        # second = Conv2D(filters=8, kernel_size=(3, 3), padding="same", activation=None, name="second_skip_2")(
-        #     net_before)
-        # second = BatchNormalization()(second)
-        # second = Activation(AGENT_ACTIVATION)(second)
-        #
-        # net_after = Add()([net_before, second])
-        # second = net_after
-        #
-        third = Conv2D(filters=16, kernel_size=(7, 7), padding="same",
-                       activation=None, name="third")(net)
-        third = BatchNormalization()(third)
+        second = Flatten()(second)
+
+        third = Conv2D(filters=24, kernel_size=(7, 7), padding="valid",
+                       activation=None, name="CNN_third")(net)
         third = Activation(AGENT_ACTIVATION)(third)
 
-        fourth = Conv2D(filters=16, kernel_size=(CONSTANT.FIELD_SIZE, CONSTANT.FIELD_SIZE), padding="same",
-                        activation=None, name="fourth")(net)
-        fourth = BatchNormalization()(fourth)
-        fourth = Activation(AGENT_ACTIVATION)(fourth)
-        #
-        # net_before = third
-        # third = Conv2D(filters=8, kernel_size=(4, 4), padding="same", activation=None, name="third_skip_1")(
-        #     net_before)
-        # third = BatchNormalization()(third)
-        # third = Activation(AGENT_ACTIVATION)(third)
-        #
-        # net_after = Add()([net_before, third])
-        # third = net_after
-        #
-        # net_before = third
-        # third = Conv2D(filters=8, kernel_size=(4, 4), padding="same", activation=None, name="third_skip_2")(
-        #     net_before)
-        # third = BatchNormalization()(third)
-        # third = Activation(AGENT_ACTIVATION)(third)
-        #
-        # net_after = Add()([net_before, third])
-        # third = net_after
-        #
-        net = Concatenate(name="concat")([first, second, third])
+        third = Flatten()(third)
 
-        net = Conv2D(filters=32, kernel_size=(7, 7), padding="same",
-                     activation=None, name="first_decoder")(net)
-        net = BatchNormalization()(net)
+        net = Concatenate()([third, second, first])
+        net = Dropout(0.2)(net)
+
+        net = Dense(128, activation=None, name="CNN_aggregation_layer")(net)
+        # net = BatchNormalization()(net)
         net = Activation("linear")(net)
 
-        net = Conv2D(filters=16, kernel_size=(7, 7), padding="same",
-                     activation=None, name="third_decoder")(net)
-        net = BatchNormalization()(net)
+        net = Dense(256, activation=None, name="Dense_first")(net)
+        # net = BatchNormalization()(net)
+        net = Activation("linear")(net)
+        net = Dropout(0.4)(net)
+
+        net = Dense(256, activation=None, name="Dense_first_additional")(net)
+        # net = BatchNormalization()(net)
+        net = Activation("linear")(net)
+        net = Dropout(0.4)(net)
+
+        net = Dense(128, activation=None, name="Dense_second")(net)
+        # net = BatchNormalization()(net)
+        net = Activation("linear")(net)
+        net = Dropout(0.4)(net)
+
+        net = Dense(CONSTANT.FIELD_SIZE * CONSTANT.FIELD_SIZE, activation=None, name="output")(net)
         net = Activation("linear")(net)
 
-        net = Concatenate(name="final_concat")([fourth, net])
-
-        net = Conv2D(filters=16, kernel_size=(8, 8), padding="same",
-                     activation=None, name="4_decoder")(net)
-        net = BatchNormalization()(net)
-        net = Activation("linear")(net)
-
-        net = Conv2D(filters=1, kernel_size=(8, 8), padding="same",
-                     activation=None, name="5_decoder")(net)
-        net = BatchNormalization()(net)
-        net = Activation("linear")(net)
+        net = Reshape((CONSTANT.FIELD_SIZE, CONSTANT.FIELD_SIZE))(net)
 
         model = Model(inputs=input, outputs=net)
         model.compile(loss="mse",
@@ -153,7 +112,8 @@ class Game_agent:
         model.compile(loss="mse",
                       optimizer='adam',
                       metrics=[
-                          AGENT_METRIC
+                          AGENT_METRIC,
+                          "mse"
                       ])
         return model
 
@@ -163,7 +123,7 @@ class Game_agent:
             s = env.reset()
             self.epsilon *= self.epsilon_decay
             self.epsilon = max(self.epsilon_min, self.epsilon)
-            if i % 50 == 0:
+            if i % max(self.save_frequency, 1) == 0:
                 print("Episode {} of {}".format(i + 1, num_episodes))
                 self.model.save(CONSTANT.AGENT_TEMP_MODEL_PATH)
                 print('save %d version' % i)
@@ -173,67 +133,84 @@ class Game_agent:
                 if np.random.random() < self.epsilon:
                     a = env.action_space.sample()
                 else:
-                    q_s = self.model(model_state)[0, :, :, 0]
+                    q_s = self.model(model_state)[0, :, :]
                     q_s = q_s.numpy()
                     a = unravel_index(q_s.argmax(), q_s.shape)
-                new_s, r, done, _ = env.step(a)
+                new_s, r, done, opp = env.step(a)
 
-                self.memory.append((model_state, a, r, done))
-                # if not done:
-                #     model_new_state = np.stack([new_s], axis=0)
-                #     predict_new_state = self.model(model_new_state)[0, :, :, 0]
-                #     possible_reward = self.gamma * np.max(predict_new_state)
-                #     target = r + self.gamma * possible_reward
-                # else:
-                #     target = r
-                # target_vec = self.model(model_state)
-                # target_vec = target_vec.numpy()
-                # target_vec[0][a[0]][a[1]][0] = target
-                # self.model.fit(model_state, target_vec, initial_epoch=epoch, epochs=1, verbose=1,
-                #                callbacks=self.get_callbacks(epoch))
-                # self.train_step(self.model, model_state, target_vec)
-
+                self.memory[1].append((model_state, a, r, done))
+                if done:
+                    last_O = self.memory[-1][-1]
+                    self.memory[-1][-1] = (last_O[0], last_O[1], -LOSE_PENALTY, last_O[3])
+                if opp:
+                    self.memory[-1].append(opp)
                 with self.summary_writer.as_default():
-                    tf.summary.scalar("reward", data=r, step=1)
-                    tf.summary.scalar("epsilon", data=self.epsilon, step=1)
+                    with tf.name_scope('game_data'):
+                        tf.summary.scalar("epsilon", data=self.epsilon, step=1)
                 epoch += 1
                 s = new_s
-                self.model.compiled_metrics.reset_state()
-            self.train_network(i % 50 == 0)
+            self.model.compiled_metrics.reset_state()
+            is_verbose = (i % self.image_verbose_frequency == 0)
+            is_NN_verbose = (i % self.NN_verbose_frequency == 0)
+            self.train_network(self.model, self.memory[1], image_verbose=is_verbose, target_snapshot=is_verbose,
+                               is_NN_verbose=is_NN_verbose)
+            self.train_network(self.model, self.memory[-1], image_verbose=is_verbose, target_snapshot=is_verbose,
+                               is_NN_verbose=is_NN_verbose, char='-1')
 
-    def train_network(self, verbose):
-        for i in range(len(self.memory) - 1, -1, -1):
-            model_state = self.memory[i][0]
-            a = self.memory[i][1]
-            reward = self.memory[i][2]
-            done = self.memory[i][3]
-            if not done:
-                new_m_state = self.memory[i + 1][0]
-                predict_new_state = self.model(new_m_state)[0, :, :, 0]
+    def train_network(self, model: Model, memory, image_verbose, target_snapshot=False, is_NN_verbose=False, char=''):
+        for i in range(len(memory) - 1, -1, -1):
+            model_state = memory[i][0]
+            a = memory[i][1]
+            reward = memory[i][2]
+            done = memory[i][3]
+            if not done and i + 1 <= len(memory) - 1:
+                new_m_state = memory[i + 1][0]
+                predict_new_state = model(new_m_state)[0, :, :]
                 possible_reward = self.gamma * np.max(predict_new_state)
                 target = reward + self.gamma * possible_reward
             else:
                 target = reward
-            target_vec = self.model(model_state)
+            target_vec = model(model_state)
             target_vec = target_vec.numpy()
             abs_max = abs(max(target_vec.max(), target_vec.min(), key=abs))
             if abs_max > WIN_REWARD:
-                target_vec = (target_vec / abs_max)*WIN_REWARD
-            target_vec[0][a[0]][a[1]][0] = target
-            self.train_step(self.model, model_state, target_vec)
+                target_vec = (target_vec / abs_max) * WIN_REWARD
+            target_vec[0][a[0]][a[1]] = target
+            self.train_step(model, model_state, target_vec)
+            # self.model.fit(model_state, target_vec, verbose=0)
             with self.summary_writer.as_default():
-                if i == 0:
-                    tf.summary.scalar("game_turn_amount", data=len(self.memory), step=1)
-                if verbose and done:
-                    tf.summary.image("result", self.matrix_to_img(model_state[0, :, :, 0], reward, a), step=self.step)
-                    tf.summary.image("target_vec", self.matrix_to_img(target_vec[0, :, :, 0], reward, a),
-                                     step=self.step)
-                tf.summary.scalar("reward_train", data=reward, step=1)
-                tf.summary.scalar("target_train", data=target, step=1)
-                for m in self.model.metrics:
-                    tf.summary.scalar(m.name, data=float(m.result()), step=1)
-                self.step += 1
-        self.memory.clear()
+                with tf.name_scope('game_data'):
+                    if i == 0 and char == '':
+                        tf.summary.scalar(f"game_turn_amount{char}", data=len(memory), step=1)
+                if is_NN_verbose and i == 0:
+                    for layer in self.model.layers:
+                        if len(layer.weights) > 0:
+                            with tf.name_scope(layer.name):
+                                for weight in layer.weights:
+                                    tf.summary.histogram(name=weight.name, data=weight, step=1)
+                with tf.name_scope(f'{char}_data'):
+                    if image_verbose:
+                        if i == len(memory) - 1:
+                            tf.summary.image(f"result_end", self.matrix_to_img(model_state[0, :, :], reward, a),
+                                             step=self.step)
+                        elif i == 0:
+                            tf.summary.image(f"result_start", self.matrix_to_img(model_state[0, :, :], reward, a),
+                                             step=self.step)
+                    with tf.name_scope('target_snapshot'):
+                        if target_snapshot:
+                            if i == len(memory) - 1:
+                                tf.summary.image(f"target_end", self.matrix_to_img(target_vec[0, :, :], reward, a),
+                                                 step=self.step)
+                            elif i == 0:
+                                tf.summary.image(f"target_start", self.matrix_to_img(target_vec[0, :, :], reward, a),
+                                                 step=self.step)
+                    tf.summary.scalar(f"reward_train{char}", data=reward, step=1)
+                for m in model.metrics:
+                    if m.name != "loss":
+                        with tf.name_scope('game_data'):
+                            tf.summary.scalar(m.name, data=float(m.result()), step=1)
+            self.step += 1
+        memory.clear()
 
     def matrix_to_img(self, data, reward, action):
         fig, ax = plt.subplots()

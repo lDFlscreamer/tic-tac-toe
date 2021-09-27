@@ -26,7 +26,8 @@ class Game_agent:
         self.epsilon_decay = 0.995
         self.save_frequency = 50
         self.image_verbose_frequency = 50
-        self.NN_verbose_frequency = 50
+        self.initial_NN_verbose_frequency = 50
+        self.NN_verbose_frequency = self.initial_NN_verbose_frequency
         self.step = 0
 
         self.memory = {1: list(), -1: list()}
@@ -67,7 +68,7 @@ class Game_agent:
         net = Concatenate()([third, second, first])
         net = Dropout(0.2)(net)
 
-        net = Dense(128, activation=None, name="CNN_aggregation_layer")(net)
+        net = Dense(128, activation=None, name="CNN_to_Dense")(net)
         # net = BatchNormalization()(net)
         net = Activation("linear")(net)
 
@@ -76,12 +77,12 @@ class Game_agent:
         net = Activation("linear")(net)
         net = Dropout(0.4)(net)
 
-        net = Dense(256, activation=None, name="Dense_first_additional")(net)
+        net = Dense(256, activation=None, name="Dense_second")(net)
         # net = BatchNormalization()(net)
         net = Activation("linear")(net)
         net = Dropout(0.4)(net)
 
-        net = Dense(128, activation=None, name="Dense_second")(net)
+        net = Dense(128, activation=None, name="Dense_third")(net)
         # net = BatchNormalization()(net)
         net = Activation("linear")(net)
         net = Dropout(0.4)(net)
@@ -123,6 +124,7 @@ class Game_agent:
             s = env.reset()
             self.epsilon *= self.epsilon_decay
             self.epsilon = max(self.epsilon_min, self.epsilon)
+            self.NN_verbose_frequency = int(self.initial_NN_verbose_frequency * self.epsilon)
             if i % max(self.save_frequency, 1) == 0:
                 print("Episode {} of {}".format(i + 1, num_episodes))
                 self.model.save(CONSTANT.AGENT_TEMP_MODEL_PATH)
@@ -145,8 +147,9 @@ class Game_agent:
                 if opp:
                     self.memory[-1].append(opp)
                 with self.summary_writer.as_default():
-                    with tf.name_scope('game_data'):
+                    with tf.name_scope('debug_data'):
                         tf.summary.scalar("epsilon", data=self.epsilon, step=1)
+                        tf.summary.scalar("NN_verbose_frequency", self.NN_verbose_frequency, step=1)
                 epoch += 1
                 s = new_s
             self.model.compiled_metrics.reset_state()

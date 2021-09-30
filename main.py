@@ -7,14 +7,14 @@ g = Game_environment()
 a = Game_agent()
 g.opponent = a.get_bot()
 
-a.epsilon_decay = 1  # <1 for dynamical change inside train process
+a.epsilon_decay = 0.999 # <1 for dynamical change inside train process
 epsilon = 1
-decay = 0.999 # 984
+decay = 0.984 # 984
 
 # decay = 1
 a.epsilon_min = 0.06
 initial_i = 0  # last  i value
-initial_j = 0  # last j value 87
+initial_j = 38  # last j value 87
 
 a.save_frequency = 50
 a.image_verbose_frequency = 50

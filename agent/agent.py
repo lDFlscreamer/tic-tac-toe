@@ -49,23 +49,13 @@ class Game_agent:
         two_channel_state = Concatenate(name="two_channel_state")([first_part, second_part])
         net = two_channel_state
 
-        first = Conv2D(filters=4, kernel_size=(3, 3), padding="valid",
-                       activation=None, name="CNN_first")(net)
-        first = Activation(AGENT_ACTIVATION)(first)
-        first = Flatten()(first)
-
-        second = Conv2D(filters=8, kernel_size=(5, 5), padding="valid",
-                        activation=None, name="CNN_second")(net)
-        second = Activation(AGENT_ACTIVATION)(second)
-        second = Flatten()(second)
-
         third = Conv2D(filters=24, kernel_size=(7, 7), padding="valid",
                        activation=None, name="CNN_third")(net)
         third = Activation(AGENT_ACTIVATION)(third)
 
         third = Flatten()(third)
 
-        net = Concatenate()([third, second, first])
+        net = third
         net = Dropout(0.2)(net)
 
         net = Dense(128, activation=None, name="CNN_to_Dense")(net)

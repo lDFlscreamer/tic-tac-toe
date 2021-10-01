@@ -5,7 +5,6 @@ from agent.agent import Game_agent
 
 just_get_summary = False
 save_modified_model = True
-
 if not just_get_summary:
     a = Game_agent(CONSTANT.TENSORBOARD_LOG_DIR + "modify")
     model2 = a.create_model()

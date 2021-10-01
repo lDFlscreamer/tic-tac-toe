@@ -47,28 +47,8 @@ class Game_agent:
         second_part = tf.cast(second_part, tf.float32)
 
         two_channel_state = Concatenate(name="two_channel_state")([first_part, second_part])
-        net = two_channel_state
 
-        first = Conv2D(filters=8, kernel_size=(3, 3), padding="same",
-                       activation=None, name="CNN_first")(net)
-        first = Activation(AGENT_ACTIVATION)(first)
-
-        first = Flatten()(first)
-
-        second = Conv2D(filters=8, kernel_size=(4, 4), padding="same",
-                       activation=None, name="CNN_second")(net)
-        second = Activation(AGENT_ACTIVATION)(second)
-
-        second = Flatten()(second)
-
-        third = Conv2D(filters=8, kernel_size=(5, 5), padding="same",
-                       activation=None, name="CNN_third")(net)
-        third = Activation(AGENT_ACTIVATION)(third)
-
-        third = Flatten()(third)
-
-        net = Concatenate(name="Concatenate")([first,second,third])
-        net = Dropout(0.2)(net)
+        net = Flatten()(two_channel_state)
 
         net = Dense(128, activation=None, name="CNN_to_Dense")(net)
         # net = BatchNormalization()(net)
@@ -79,12 +59,7 @@ class Game_agent:
         net = Activation("linear")(net)
         net = Dropout(0.4)(net)
 
-        net = Dense(256, activation=None, name="Dense_second")(net)
-        # net = BatchNormalization()(net)
-        net = Activation("linear")(net)
-        net = Dropout(0.4)(net)
-
-        net = Dense(128, activation=None, name="Dense_third")(net)
+        net = Dense(128, activation=None, name="Dense_second")(net)
         # net = BatchNormalization()(net)
         net = Activation("linear")(net)
         net = Dropout(0.4)(net)

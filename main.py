@@ -14,7 +14,7 @@ decay = 0.984 # 984
 # decay = 1
 a.epsilon_min = 0.06
 initial_i = 0  # last  i value
-initial_j = 38  # last j value 87
+initial_j = 30  # last j value 87
 
 a.save_frequency = 50
 a.image_verbose_frequency = 50

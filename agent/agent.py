@@ -50,21 +50,21 @@ class Game_agent:
 
         net = Flatten()(two_channel_state)
 
-        net = Dense(128, activation=None, name="CNN_to_Dense")(net)
+        net = Dense(input_shape=(None,98),units=98,activation=None, name="7x7_input_to_Dense")(net)
         # net = BatchNormalization()(net)
         net = Activation("linear")(net)
 
-        net = Dense(256, activation=None, name="Dense_first")(net)
-        # net = BatchNormalization()(net)
-        net = Activation("linear")(net)
-        net = Dropout(0.4)(net)
-
-        net = Dense(128, activation=None, name="Dense_second")(net)
+        net = Dense(units=256, activation=None, name="Dense_first")(net)
         # net = BatchNormalization()(net)
         net = Activation("linear")(net)
         net = Dropout(0.4)(net)
 
-        net = Dense(CONSTANT.FIELD_SIZE * CONSTANT.FIELD_SIZE, activation=None, name="output")(net)
+        net = Dense(units=128, activation=None, name="Dense_second")(net)
+        # net = BatchNormalization()(net)
+        net = Activation("linear")(net)
+        net = Dropout(0.4)(net)
+
+        net = Dense(units=CONSTANT.FIELD_SIZE * CONSTANT.FIELD_SIZE, activation=None, name="output")(net)
         net = Activation("linear")(net)
 
         net = Reshape((CONSTANT.FIELD_SIZE, CONSTANT.FIELD_SIZE))(net)

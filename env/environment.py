@@ -22,7 +22,9 @@ LOSE_PENALTY = 250
 class Game_environment(gym.Env):
     def __init__(self):
         super(Game_environment, self).__init__()
-        self.state = np.zeros(shape=(CONSTANT.FIELD_SIZE, CONSTANT.FIELD_SIZE), dtype=np.int)
+        self.epsilon = 1.0
+        self.epsilon_min = 0.0002
+        self.state = np.zeros(shape=(CONSTANT.FIELD_SIZE, CONSTANT.FIELD_SIZE, 1), dtype=np.int)
         self.opponent = self.get_oponent()
         self.action_space = spaces.Box(low=0, high=CONSTANT.FIELD_SIZE - 1, shape=(2,), dtype=np.int)
 
@@ -40,13 +42,13 @@ class Game_environment(gym.Env):
         if not my_turn[2]:
             state = my_turn[0]
             opponent_state = np.stack([state * -1], axis=0)
-            if self.opponent:
+            if (not self.opponent) or np.random.random() < max(self.epsilon, self.epsilon_min):
+                a = self.action_space.sample()
+            else:
                 opponent_action = self.opponent(opponent_state)[0, :, :]
                 opponent_action = opponent_action.numpy()
                 a = unravel_index(opponent_action.argmax(), opponent_action.shape)
                 # print(a)
-            else:
-                a = self.action_space.sample()
             opponent_turn = self.do_turn(a, -1)
             if opponent_turn[2]:
                 reward = -LOSE_PENALTY

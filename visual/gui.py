@@ -9,7 +9,7 @@ from env.environment import Game_environment
 
 
 class TicTacToeGUI:
-    def __init__(self):
+    def __init__(self, epsilon=0.06):
         self.t = Tk()
         self.t.title("TIC TAC TOE")
         self.t.configure(bg="white")
@@ -20,6 +20,8 @@ class TicTacToeGUI:
 
         self.buttons = []
         self.env = Game_environment()
+        self.env.epsilon_min = 0.0
+        self.env.epsilon = epsilon
         self.memory = {1: list(), -1: list()}
         self.agent = Game_agent(CONSTANT.TENSORBOARD_GUI + datetime.now().strftime("%Y%m%d-%H-%M-%S"))
         if not self.env.opponent:
@@ -56,8 +58,9 @@ class TicTacToeGUI:
             self.memory[-1].append(step_)
         if step[2]:
             self.end = step[2]
-            self.agent.train_network(self.env.opponent, self.memory[1], True)
-            self.agent.train_network(self.env.opponent, self.memory[-1], True, '-1')
+            self.agent.train_network(model=self.env.opponent, memory=self.memory[1], image_verbose=True, img_eps=0.0)
+            self.agent.train_network(model=self.env.opponent, memory=self.memory[-1], image_verbose=True,
+                                     img_eps=self.env.epsilon, char='-1')
             print('end')
         self.score += step[1]
         self.update_score()

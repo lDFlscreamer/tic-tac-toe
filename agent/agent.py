@@ -2,7 +2,6 @@ import io
 import os
 from datetime import datetime
 
-import gym
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
@@ -11,7 +10,7 @@ from tensorflow.keras.layers import *
 from tensorflow.keras.models import *
 
 import CONSTANT
-from env.environment import WIN_REWARD, LOSE_PENALTY
+from env.environment import WIN_REWARD, LOSE_PENALTY, Game_environment
 
 AGENT_METRIC = 'mae'
 AGENT_ACTIVATION = "linear"
@@ -50,21 +49,20 @@ class Game_agent:
 
         net = Flatten()(two_channel_state)
 
-        net = Dense(input_shape=(None,98),units=98,activation=None, name="7x7_input_to_Dense")(net)
+        net = Dense(input_shape=(None, 98), units=98, activation=None, name="7x7_input_to_Dense")(net)
         # net = BatchNormalization()(net)
         net = Activation("linear")(net)
 
         net = Dense(units=256, activation=None, name="Dense_first")(net)
         # net = BatchNormalization()(net)
         net = Activation("linear")(net)
-        net = Dropout(0.4)(net)
 
-        net = Dense(units=128, activation=None, name="Dense_second")(net)
+        net = Dense(units=256, activation=None, name="Dense_second")(net)
         # net = BatchNormalization()(net)
         net = Activation("linear")(net)
         net = Dropout(0.4)(net)
 
-        net = Dense(units=CONSTANT.FIELD_SIZE * CONSTANT.FIELD_SIZE, activation=None, name="output")(net)
+        net = Dense(units=CONSTANT.FIELD_SIZE * CONSTANT.FIELD_SIZE, activation=None, name="output", use_bias=True)(net)
         net = Activation("linear")(net)
 
         net = Reshape((CONSTANT.FIELD_SIZE, CONSTANT.FIELD_SIZE))(net)
@@ -95,13 +93,14 @@ class Game_agent:
                       ])
         return model
 
-    def reinforcement_learning(self, env: gym.Env, num_episodes=250):
+    def reinforcement_learning(self, env: Game_environment, num_episodes=250):
         for i in range(num_episodes):
             epoch = 0
             s = env.reset()
             self.epsilon *= self.epsilon_decay
             self.epsilon = max(self.epsilon_min, self.epsilon)
-            self.NN_verbose_frequency = int(self.initial_NN_verbose_frequency * self.epsilon)
+            env.epsilon = self.epsilon
+            self.NN_verbose_frequency = max(1, int(self.initial_NN_verbose_frequency * self.epsilon))
             if i % max(self.save_frequency, 1) == 0:
                 print("Episode {} of {}".format(i + 1, num_episodes))
                 self.model.save(CONSTANT.AGENT_TEMP_MODEL_PATH)
@@ -126,18 +125,24 @@ class Game_agent:
                 with self.summary_writer.as_default():
                     with tf.name_scope('debug_data'):
                         tf.summary.scalar("epsilon", data=self.epsilon, step=1)
+                        tf.summary.scalar("env_epsilon", data=env.epsilon, step=1)
                         tf.summary.scalar("NN_verbose_frequency", self.NN_verbose_frequency, step=1)
                 epoch += 1
                 s = new_s
             self.model.compiled_metrics.reset_state()
             is_verbose = (i % self.image_verbose_frequency == 0)
             is_NN_verbose = (i % self.NN_verbose_frequency == 0)
-            self.train_network(self.model, self.memory[1], image_verbose=is_verbose, target_snapshot=is_verbose,
+            self.train_network(self.model, self.memory[1], image_verbose=is_verbose, img_eps=round(self.epsilon, 5),
+                               target_snapshot=is_verbose,
                                is_NN_verbose=is_NN_verbose)
-            self.train_network(self.model, self.memory[-1], image_verbose=is_verbose, target_snapshot=is_verbose,
+            self.train_network(self.model, self.memory[-1], image_verbose=is_verbose, img_eps=round(env.epsilon, 5),
+                               target_snapshot=is_verbose,
                                is_NN_verbose=is_NN_verbose, char='-1')
 
-    def train_network(self, model: Model, memory, image_verbose, target_snapshot=False, is_NN_verbose=False, char=''):
+    def train_network(self, model: Model, memory, image_verbose, img_eps, target_snapshot=False, is_NN_verbose=False,
+                      char=''):
+        target_lst = []
+        state_lst = []
         for i in range(len(memory) - 1, -1, -1):
             model_state = memory[i][0]
             a = memory[i][1]
@@ -147,7 +152,7 @@ class Game_agent:
                 new_m_state = memory[i + 1][0]
                 predict_new_state = model(new_m_state)[0, :, :]
                 possible_reward = self.gamma * np.max(predict_new_state)
-                target = reward + self.gamma * possible_reward
+                target = reward + possible_reward
             else:
                 target = reward
             target_vec = model(model_state)
@@ -156,43 +161,53 @@ class Game_agent:
             if abs_max > WIN_REWARD:
                 target_vec = (target_vec / abs_max) * WIN_REWARD
             target_vec[0][a[0]][a[1]] = target
-            self.train_step(model, model_state, target_vec)
+
+            target_lst.append(target_vec)
+            state_lst.append(model_state[0, :, :])
+
             # self.model.fit(model_state, target_vec, verbose=0)
             with self.summary_writer.as_default():
                 with tf.name_scope('game_data'):
                     if i == 0 and char == '':
                         tf.summary.scalar(f"game_turn_amount{char}", data=len(memory), step=1)
-                if is_NN_verbose and i == 0:
-                    for layer in self.model.layers:
-                        if len(layer.weights) > 0:
-                            with tf.name_scope(layer.name):
-                                for weight in layer.weights:
-                                    tf.summary.histogram(name=weight.name, data=weight, step=1)
                 with tf.name_scope(f'{char}_data'):
                     if image_verbose:
                         if i == len(memory) - 1:
-                            tf.summary.image(f"result_end", self.matrix_to_img(model_state[0, :, :], reward, a),
+                            tf.summary.image(f"result_end",
+                                             self.matrix_to_img(model_state[0, :, :], reward, a, img_eps),
                                              step=self.step)
                         elif i == 0:
-                            tf.summary.image(f"result_start", self.matrix_to_img(model_state[0, :, :], reward, a),
+                            tf.summary.image(f"result_start",
+                                             self.matrix_to_img(model_state[0, :, :], reward, a, img_eps),
                                              step=self.step)
                     with tf.name_scope('target_snapshot'):
                         if target_snapshot:
                             if i == len(memory) - 1:
-                                tf.summary.image(f"target_end", self.matrix_to_img(target_vec[0, :, :], reward, a),
+                                tf.summary.image(f"target_end",
+                                                 self.matrix_to_img(target_vec[0, :, :], reward, a, img_eps),
                                                  step=self.step)
                             elif i == 0:
-                                tf.summary.image(f"target_start", self.matrix_to_img(target_vec[0, :, :], reward, a),
+                                tf.summary.image(f"target_start",
+                                                 self.matrix_to_img(target_vec[0, :, :], reward, a, img_eps),
                                                  step=self.step)
                     tf.summary.scalar(f"reward_train{char}", data=reward, step=1)
-                for m in model.metrics:
-                    if m.name != "loss":
-                        with tf.name_scope('game_data'):
-                            tf.summary.scalar(m.name, data=float(m.result()), step=1)
             self.step += 1
+
+        self.train_step(model, np.stack(state_lst, axis=0), np.stack(target_lst, axis=0))
+        with self.summary_writer.as_default():
+            if is_NN_verbose:
+                for layer in self.model.layers:
+                    if len(layer.weights) > 0:
+                        with tf.name_scope(layer.name):
+                            for weight in layer.weights:
+                                tf.summary.histogram(name=weight.name, data=weight, step=1)
+            for m in model.metrics:
+                if m.name != "loss":
+                    with tf.name_scope('game_data'):
+                        tf.summary.scalar(m.name, data=float(m.result()), step=1)
         memory.clear()
 
-    def matrix_to_img(self, data, reward, action):
+    def matrix_to_img(self, data, reward, action, epsilon):
         fig, ax = plt.subplots()
         im = ax.imshow(data)
         # Loop over data dimensions and create text annotations.
@@ -201,7 +216,7 @@ class Game_agent:
                 value = data[i, j]
                 text = ax.text(j, i, round(value, 1),
                                ha="center", va="center", color="w")
-        ax.set_title(f"reward:{reward}, action=[{action[0]}:{action[1]}]")
+        ax.set_title(f"reward:{reward}, action=[{action[0]}:{action[1]}],eps={epsilon}")
         buf = io.BytesIO()
         plt.savefig(buf, format='png')
         plt.close(fig)
@@ -226,7 +241,7 @@ class Game_agent:
             loss = model.compiled_loss(y, y_pred, regularization_losses=model.losses)
 
         # Compute gradients
-        trainable_vars = model.trainable_variables
+        trainable_vars = model.trainable_weights
         gradients = tape.gradient(loss, trainable_vars)
         # Update weights
         model.optimizer.apply_gradients(zip(gradients, trainable_vars))
